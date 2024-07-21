@@ -36,6 +36,14 @@ class SimpleVK {
             exit('ok');
         }
 
+        if (PHP_VERSION_ID < 80000) {
+            throw new Exception('SimpleVK3 требует PHP версии 8.0.0 или выше. Вы используете версию ' . PHP_VERSION);
+        }
+
+        if (version_compare($version, '5.139', '<')) {
+            throw new Exception('SimpleVK3 работает с VK API версиями 5.139 или выше. Вы запустили с v ' . $version);
+        }
+
         $this->processAuth($token, $version, $also_version);
         $this->data = json_decode(file_get_contents('php://input'), 1);
         $this->data_backup = $this->data;
