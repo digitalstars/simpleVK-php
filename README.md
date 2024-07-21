@@ -88,7 +88,7 @@ require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\SimpleVK as vk;
-$vk = vk::create(ТОКЕН, '5.120')->setConfirm(STR); //STR - строка подтверждения сервера
+$vk = vk::create(ТОКЕН, '5.199')->setConfirm(STR); //STR - строка подтверждения сервера
 $vk->msg('Привет, ~!fn~')->send();
 ```
 ### Простой Callback
@@ -97,7 +97,7 @@ $vk->msg('Привет, ~!fn~')->send();
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\SimpleVK as vk;
-$vk = vk::create(ТОКЕН, '5.120')->setConfirm(STR); //STR - строка подтверждения сервера
+$vk = vk::create(ТОКЕН, '5.199')->setConfirm(STR); //STR - строка подтверждения сервера
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникние в скрипте
 $data = $vk->initVars($peer_id, $user_id, $type, $message); //инициализация переменных из события
 if($type == 'message_new') {
@@ -110,14 +110,14 @@ if($type == 'message_new') {
 > Если указать токен группы - будет LongPoll.  
 > Если указать токен пользователя - User LongPoll.  
 > А еще можно указать логин и пароль от аккаунта:  
-> `new LongPoll(ЛОГИН, ПАРОЛЬ, '5.120');`  
+> `new LongPoll(ЛОГИН, ПАРОЛЬ, '5.199');`  
 > Но советую создать токен вот по этому [гайду](https://vkhost.github.io/)
 
 ```php
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\LongPoll;
-$vk = LongPoll::create(ТОКЕН, '5.120');
+$vk = LongPoll::create(ТОКЕН, '5.199');
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникние в скрипте
 $vk->listen(function () use ($vk) {
     $data = $vk->initVars($peer_id, $user_id, $type, $message); //инициализация переменных из события
@@ -134,7 +134,7 @@ $vk->listen(function () use ($vk) {
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\Bot;
-$bot = Bot::create(ТОКЕН, '5.120');
+$bot = Bot::create(ТОКЕН, '5.199');
 $bot->cmd('img', '!картинка')->img('cat.jpg')->text('Вот твой кот');
 $bot->run(); //запускаем обработку события
 ```
@@ -144,7 +144,7 @@ $bot->run(); //запускаем обработку события
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\{Bot, LongPoll};
-$vk = LongPoll::create(ТОКЕН, '5.120');
+$vk = LongPoll::create(ТОКЕН, '5.199');
 $bot = Bot::create($vk);
 $bot->cmd('img', '!картинка')->img('cat.jpg')->text('Вот твой кот');
 $vk->listen(function () use ($bot) {
@@ -157,7 +157,7 @@ $vk->listen(function () use ($bot) {
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\{Bot, SimpleVK as vk};
-$vk = vk::create(ТОКЕН, '5.120');
+$vk = vk::create(ТОКЕН, '5.199');
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникшие в скрипте
 $bot = Bot::create($vk);
 //отправит картинку с текстом
@@ -178,7 +178,7 @@ $bot->run();
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\{Bot, SimpleVK as vk};
-$vk = vk::create(ТОКЕН, '5.120');
+$vk = vk::create(ТОКЕН, '5.199');
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникшие в скрипте
 $bot = Bot::create($vk);
 $bot->redirect('other', 'first'); //если пришла неизвестная кнопка/текст, то выполняем first
@@ -193,7 +193,7 @@ $bot->run();
 <?php
 require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 use DigitalStars\SimpleVK\{Bot, Store, SimpleVK as vk};
-$vk = vk::create(ТОКЕН, '5.120');
+$vk = vk::create(ТОКЕН, '5.199');
 $bot = Bot::create($vk);
 $bot->cmd('cmd1', '!запомни %s')->text('Запомнил!')->func(function ($msg, $params) use ($vk) {
     $vk->initVars($id, $user_id, $payload, $user_id);
