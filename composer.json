@@ -3,18 +3,8 @@
     "description": "Library for easy work with VK com api",
     "license": "MIT",
     "minimum-stability": "dev",
-    "authors": [
-        {
-            "name": "ZeRoX",
-            "email": "as234zx15@yandex.ru"
-        },
-        {
-            "name": "Runnin",
-            "email": "mr.kirilll12@mail.ru"
-        }
-    ],
     "require": {
-        "php": ">=7.4",
+        "php": ">=8.0",
         "ext-curl": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
@@ -27,8 +17,5 @@
         "psr-4": {
             "DigitalStars\\SimpleVK\\": "src/"
         }
-    },
-    "require-dev": {
-        "rector/rector": "dev-main"
     }
 }
