@@ -40,8 +40,8 @@ class SimpleVK {
             throw new Exception('SimpleVK3 требует PHP версии 8.0.0 или выше. Вы используете версию ' . PHP_VERSION);
         }
 
-        if (version_compare($version, '5.139', '<')) {
-            throw new Exception('SimpleVK3 работает с VK API версиями 5.139 или выше. Вы запустили с v ' . $version);
+        if ((double)($version) <  5.139) {
+            throw new Exception('SimpleVK3 работает с VK API версиями 5.139 или выше. Вы запустили с v' . $version);
         }
 
         $this->processAuth($token, $version, $also_version);
