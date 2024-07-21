@@ -10,7 +10,7 @@ class SimpleVK {
     use ErrorHandler;
 
     protected $version;
-    protected $data = [];
+    public $data = [];
     protected $data_backup = [];
     protected $api_url = 'https://api.vk.com/method/';
     protected $token;
@@ -201,12 +201,25 @@ class SimpleVK {
             if ($fwd) {
                 foreach ($fwd as $value) {
                     $affected_users['fwd'][] = $value['from_id'];
+                    if (preg_match_all("/\[(id|club|public)([0-9]*)\|[^\]]*\]/", $value['text'], $matches, PREG_SET_ORDER)) {
+                        foreach ($matches as $key => $match) {
+                            $affected_users['fwd'][] = (int)(($match[1] == 'id') ? $match[2] : -$match[2]);
+                        }
+                    }
                 }
             }
         }
 
         if(in_array('reply', $category)) {
-            $affected_users['reply'] = [$this->data['object']['reply_message']['from_id'] ?? null];
+            $reply_from_id = $this->data['object']['reply_message']['from_id'] ?? null;
+            if($reply_from_id) {
+                $affected_users['reply'] = [$reply_from_id];
+                if (preg_match_all("/\[(id|club|public)([0-9]*)\|[^\]]*\]/", $this->data['object']['reply_message']['text'], $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $key => $value) {
+                        $affected_users['reply'][] = (int)(($value[1] == 'id') ? $value[2] : -$value[2]);
+                    }
+                }
+            }
         }
 
         $this->initText($msg);
@@ -221,7 +234,7 @@ class SimpleVK {
 
         if(in_array('url', $category)) {
             if (preg_match_all("/vk.com\/([a-z0-9_]{1,})?/", $msg, $matches)) {
-                $user_ids = $this->userInfo($matches[1]);
+                $user_ids = $this->userInfo($matches[1][0]);
                 $user_ids = (isset($user_ids['id'])) ? [$user_ids] : $user_ids;
                 $affected_users['url'] = array_column($user_ids, 'id') ?? [];
                 if (count($matches[1]) != count($affected_users['url'])) { //оптимизация
@@ -266,12 +279,12 @@ class SimpleVK {
     }
 
     public function clientSupport(&$keyboard = null, &$inline = null, &$carousel = null, &$button_actions = null, &$lang_id = null) {
-        $data = $this->data_backup['object']['client_info'];
-        $keyboard = $data['keyboard'];
-        $inline = $data['inline_keyboard'];
-        $carousel = $data['carousel'];
-        $button_actions = $data['button_actions'];
-        $lang_id = $data['lang_id'];
+        $data = $this->data_backup['object']['client_info'] ?? null;
+        $keyboard = $data['keyboard'] ?? null;
+        $inline = $data['inline_keyboard'] ?? null;
+        $carousel = $data['carousel'] ?? null;
+        $button_actions = $data['button_actions'] ?? null;
+        $lang_id = $data['lang_id'] ?? null;
         return $data;
     }
 
@@ -437,17 +450,17 @@ class SimpleVK {
     public function userInfo($users_url = null, $fields = null, $name_case = 'nom') {
         $users_url = is_array($users_url) ? $users_url : [$users_url];
         $fields = is_array($fields) ? $fields : [$fields];
-        $user_ids = array_map('self::parseUrl', $users_url);
+        $user_ids = array_map([__CLASS__, 'parseUrl'], $users_url);
         $param_ids = ['user_ids' => implode(',', $user_ids)];
         if ($param_ids['user_ids'] == '') {
             $param_ids = [];
         }
-        $scope = ["fields" => implode(",", $fields)];
+        $scope = is_array($fields) ? ["fields" => implode(",", $fields)] : [];
         $case = ['name_case' => $name_case];
 
         try {
             $result = $this->request('users.get', $param_ids + $scope + $case);
-            if (isset($result['error'])) {
+            if (isset($result['error']) || !$result) {
                 return $result;
             }
             return count($result) == 1 ? $result[0] : $result;
@@ -459,7 +472,7 @@ class SimpleVK {
     public function groupInfo($groups_url = null, $fields = null) {
         $groups_url = is_array($groups_url) ? $groups_url : [$groups_url];
         $fields = is_array($fields) ? $fields : [$fields];
-        $group_ids = array_map('self::parseUrl', $groups_url);
+        $group_ids = array_map([__CLASS__, 'parseUrl'], $groups_url);
         $param_ids = ['group_ids' => implode(',', $group_ids)];
         if ($param_ids['group_ids'] == '') {
             $param_ids = [];
@@ -581,41 +594,55 @@ class SimpleVK {
 
     public function request($method, $params = []) {
         $time_start = microtime(true);
+        $messages = [];
         if (isset($params['message'])) {
             $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
-            if ($this->is_test_len_str and mb_strlen($params['message']) > 544)
-                $params['message'] = $this->lengthMessageProcessing($params['peer_id'] ?? null, $params['message'], $params);
+            $messages = $this->lengthMessageProcessing($params['message']);
         }
         if (isset($params['peer_id']) && is_array($params['peer_id'])) { //возможно везде заменить на peer_ids в методах
             $params['peer_ids'] = join(',', $params['peer_id']);
             unset($params['peer_id']);
         }
-        for ($iteration = 0; $iteration < 6; ++$iteration) {
-            try {
-                $return = $this->request_core($method, $params);
-                $this->time_checker += (microtime(true) - $time_start);
-                return $return;
-            } catch (SimpleVkException $e) {
-                if (in_array($e->getCode(), $this->request_ignore_error)) {
-                    sleep(1);
-                    $iteration = 0;
-                    continue;
-                } else if ($e->getCode() == 5 and isset($this->auth) and $iteration != 0) {
-                    $this->auth->reloadToken();
-                    $this->token = $this->auth->getAccessToken();
-                    continue;
-                } else if ($e->getCode() == 77777) {
-                    if ($iteration == 5) {
-                        $error_message = "Запрос к вк вернул пустоту. Завершение 5 попыток отправки\n
+
+        $run_request = function ($method, $params) {
+            for ($iteration = 0; $iteration < 6; ++$iteration) {
+                try {
+                    $time_start2 = microtime(true);
+                    $return = $this->request_core($method, $params);
+                    $this->time_checker += (microtime(true) - $time_start2);
+                    return $return;
+                } catch (SimpleVkException $e) {
+                    if (in_array($e->getCode(), $this->request_ignore_error)) {
+                        sleep(1);
+                        $iteration = 0;
+                        continue;
+                    } else if ($e->getCode() == 5 and isset($this->auth) and $iteration != 0) {
+                        $this->auth->reloadToken();
+                        $this->token = $this->auth->getAccessToken();
+                        continue;
+                    } else if ($e->getCode() == 77777) {
+                        if ($iteration == 5) {
+                            $error_message = "Запрос к вк вернул пустоту. Завершение 5 попыток отправки\n
                                   Метод:$method\nПараметры:\n" . json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                        throw new SimpleVkException(77777, $error_message);
+                            throw new SimpleVkException(77777, $error_message);
+                        }
+                        continue;
                     }
-                    continue;
+                    $this->time_checker += (microtime(true) - $time_start2);
+                    throw new Exception($e->getMessage(), $e->getCode());
                 }
-                $this->time_checker += (microtime(true) - $time_start);
-                throw new Exception($e->getMessage(), $e->getCode());
             }
+        };
+
+        if(!empty($messages)) {
+            foreach ($messages as $message) {
+                $params['message'] = $message;
+                return $run_request($method, $params);
+            }
+        } else {
+            return $run_request($method, $params);
         }
+
         $this->time_checker += (microtime(true) - $time_start);
         return false;
     }
@@ -626,6 +653,11 @@ class SimpleVK {
         if ($id >= 2e9) {
             $this->initUserID($id);
         }
+
+        if(!is_string($message)) {
+            return $message;
+        }
+
         if (strpos($message, '~') !== false) {
             return preg_replace_callback(
                 "|~(.*?)~|",
@@ -675,25 +707,50 @@ class SimpleVK {
         return $payload;
     }
 
-    protected function lengthMessageProcessing($id, $str, $params) {
-        $bytes = 0;
-        $tmp_str = '';
-        $this->is_test_len_str = false;
-        $anon = function ($a) use (&$tmp_str, &$bytes, $id, $params) {
-            $byte = strlen((@iconv('UTF-8', 'cp1251', $a[0]))
-                ?: "$#" . (unpack('V', iconv('UTF-8', 'UCS-4LE', $a[0]))[1]) . ";");
-            $bytes += $byte;
-            if ($bytes > 4096) {
-                $this->request('messages.send', ['message' => $tmp_str, 'peer_id' => $id, 'dont_parse_links' => $params['dont_parse_links'] ?? 0]); // Отправка части сообщения
-                $bytes = $byte;
-                $tmp_str = $a[0];
-            } else
-                $tmp_str .= $a[0];
-            return "";
-        };
-        preg_replace_callback('/./us', $anon, mb_convert_encoding($str, 'UTF-8', 'UTF-8'));
-        $this->is_test_len_str = true;
-        return $tmp_str;
+    protected function lengthMessageProcessing($message) {
+        $maxSmileyLimit = 1000.0; // Максимальный лимит сообщения в смайлах(целые)+символы
+        $maxTotalPlaces = 4096; // Общее максимальное количество символов и смайлов
+
+        $currentTotal = 0; // Текущая общая сумма символов и смайлов
+        $messages = [];
+
+        // Перебираем каждый символ в сообщении
+        $count = mb_strlen($message, 'UTF-8');
+
+        for ($i = 0; $i < $count; $i++) {
+            $char = mb_substr($message, $i, 1, 'UTF-8');
+            $code = mb_ord($char, 'UTF-8');
+
+            if(($code >= 0x1F300 && $code <= 0x1F64F) || ($code >= 0x1F600 && $code <= 0x1F64F)) {
+                //если это смайл или символ
+                --$maxSmileyLimit; //вычитаем 1ед. из лимита
+                $currentTotal += 2; // Учитываем 2 символа за смайл
+            } else {
+                $maxSmileyLimit -= 0.1115; //опытным путем, каждые 1000 символов позволяют добавить 111.5 смайлов
+                ++$currentTotal; // Учитываем 1 символ
+            }
+
+            // Если текущая общая сумма достигла или превысила максимальное количество символов или достигнул лимит в смайлах
+            if ($currentTotal >= $maxTotalPlaces || $maxSmileyLimit < 1) {
+                $last50Chars = mb_substr($message, max(0, $i - 49), 50, 'UTF-8');
+                $pos = mb_strrpos($last50Chars, "\n");
+                // Если нашли \n и разница между текущей позицией $i и $pos меньше 50
+                if ($pos !== false && ($i - (max(0, $i - 49) + $pos)) < 50) {
+                    $messagePart1 = mb_substr($message, 0, max(0, $i - 49) + $pos, 'UTF-8');
+                    $messagePart2 = mb_substr($message, max(0, $i - 49) + $pos + 1, null, 'UTF-8');
+                } else {
+                    // Разделяем сообщение по текущему символу \n
+                    $messagePart1 = mb_substr($message, 0, $i + 1, 'UTF-8');
+                    $messagePart2 = mb_substr($message, $i + 1, null, 'UTF-8');
+                }
+
+                $processedPart2 = $this->lengthMessageProcessing($messagePart2); // Рекурсивно обрабатываем оставшуюся часть
+                return [$messagePart1, ...$processedPart2]; // Возвращаем разделенные части
+            }
+        }
+
+        // Если не достигли максимального значения, возвращаем исходное сообщение
+        return [$message];
     }
 
     protected function checkTypeEvent() {
@@ -721,7 +778,9 @@ class SimpleVK {
     }
 
     protected static function parseUrl($url) {
-        $url = preg_replace("!.*?/!", '', $url);
+        if($url) {
+            $url = preg_replace("!.*?/!", '', $url);
+        }
         return $url === '' ? false : $url;
     }
 
@@ -746,7 +805,7 @@ class SimpleVK {
             throw new SimpleVkException(77777, 'Запрос к вк вернул пустоту.');
         }
         if (isset($result['error'])) {
-            unset($params['access_token']);
+            $params['access_token'] = substr($params['access_token'], 0, 10).'****';
             $result['error']['request_params'] = $params;
             if (self::$error_suppression) {
                 return $result;

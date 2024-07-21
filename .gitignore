@@ -3,3 +3,4 @@ Tests/
 vendor/
 composer.phar
 composer.lock
+rector.php

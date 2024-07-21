@@ -24,14 +24,14 @@ class LongPoll extends SimpleVK {
             $this->auth_type = 'user';
         } else {
             $this->auth_type = 'group';
-            $this->group_id = $this->request('groups.getById')[0]['id'];
-            $this->request('groups.setLongPollSettings', [
-                'group_id' => $this->group_id,
-                'enabled' => 1,
-                'api_version' => $this->version,
-                'message_new' => 1,
-                'message_event' => 1
-            ]);
+            $this->group_id = $this->request('groups.getById')['groups'][0]['id'];
+//            $this->request('groups.setLongPollSettings', [
+//                'group_id' => $this->group_id,
+//                'enabled' => 1,
+//                'api_version' => $this->version,
+//                'message_new' => 1,
+//                'message_event' => 1
+//            ]);
         }
         $this->getLongPollServer();
     }

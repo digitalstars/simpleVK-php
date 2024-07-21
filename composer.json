@@ -14,7 +14,7 @@
         }
     ],
     "require": {
-        "php": ">=7.0",
+        "php": ">=7.4",
         "ext-curl": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
@@ -27,5 +27,8 @@
         "psr-4": {
             "DigitalStars\\SimpleVK\\": "src/"
         }
+    },
+    "require-dev": {
+        "rector/rector": "dev-main"
     }
 }
