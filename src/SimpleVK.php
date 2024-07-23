@@ -250,14 +250,10 @@ class SimpleVK {
                     $affected_users['url'] = array_column($user_ids, 'id') ?? [];
 
                     // Удаляем уже обработанные идентификаторы пользователей из списка
-                    $ids = array_values(array_diff($ids, $affected_users['url']));
+                    $group_ids = array_values(array_diff($ids, $affected_users['url']));
 
                     // Обрабатываем оставшиеся идентификаторы как группы
-                    if (!empty($ids)) {
-                        $group_ids = array_map(function ($el) {
-                            return str_starts_with($el, 'public') ? str_replace('public', 'club', $el) : $el;
-                        }, $ids);
-
+                    if (!empty($group_ids)) {
                         $group_ids = $this->groupInfo($group_ids);
                         $group_ids = isset($group_ids['id']) ? [$group_ids] : $group_ids;
                         $group_ids = array_column($group_ids, 'id') ?? [];
