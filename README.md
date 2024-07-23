@@ -5,7 +5,7 @@
 <p align="center">
 <img src="https://img.shields.io/badge/PHP-%3E=%208.0-8992bb.svg" alt="php version">
 <img src="https://img.shields.io/badge/VK_API-%205.139+-8992bb.svg" alt="VK api version">
-<img src="https://img.shields.io/badge/realise-%203.1.2--beta-8992bb.svg" alt="VK api version">
+<img src="https://img.shields.io/badge/realise-%203.1.3--beta-8992bb.svg" alt="VK api version">
 <img src="https://img.shields.io/packagist/l/digitalstars/simplevk" alt="License">
 </p> 
 
