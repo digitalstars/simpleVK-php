@@ -101,7 +101,8 @@ class SimpleVK {
 
     public function reply($message) {
         $this->initPeerID($id);
-        return $this->request('messages.send', ['peer_id' => $id, 'message' => $message, 'random_id' => 0]);
+        $result = $this->request('messages.send', ['peer_ids' => $id, 'message' => $message, 'random_id' => 0]);
+        return $result[0]['conversation_message_id'] ?? null;
     }
 
     public function msg($text = null) {

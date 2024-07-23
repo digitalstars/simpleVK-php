@@ -286,12 +286,21 @@ class Message extends BaseConstructor {
             $this->vk->initPeerID($id);
 
         $query = $this->assembleMsg($id, $var);
-        if (is_null($query))
+        if (is_null($query)) {
             return null;
-        if (empty($query))
+        }
+
+        if (empty($query)) {
             $result = null;
-        else
-            $result = $this->request('messages.send', ['peer_id' => $id, 'random_id' => 0] + $query);
+        } else {
+            $result = $this->request('messages.send', ['peer_ids' => $id, 'random_id' => 0] + $query);
+            if(!is_array($id)) {
+                $result = $result[0]['conversation_message_id'] ?? null;
+            } else {
+                $result = array_column($result, 'conversation_message_id');
+            }
+        }
+
         $this->postProcessing($id, $result, $var);
         return $result;
     }

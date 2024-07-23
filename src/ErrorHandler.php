@@ -47,7 +47,7 @@ trait ErrorHandler {
             if (is_callable($this->user_error_hendler_or_ids)) {
                 call_user_func_array($this->user_error_hendler_or_ids, [$errors[$type], $message, $file, $line, $msg, $code, $exception]);
             } else { //тут может не отправиться из-за того, что сообщение слишком длинное
-                $this->request('messages.send', ['peer_id' => $this->user_error_hendler_or_ids, 'message' => $msg, 'random_id' => 0, 'dont_parse_links' => 1]);
+                $this->request('messages.send', ['peer_ids' => $this->user_error_hendler_or_ids, 'message' => $msg, 'random_id' => 0, 'dont_parse_links' => 1]);
             }
         }
         return TRUE; // не запускаем внутренний обработчик ошибок PHP
