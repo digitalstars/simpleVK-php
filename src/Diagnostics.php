@@ -27,7 +27,7 @@ class Diagnostics {
         self::$final_text .= self::cyan("Диагностика системы для работы с SimpleVK " . SIMPLEVK_VERSION, $EOL, '') . $EOL;
         self::$final_text .= self::cyan("Информация о системе", $EOL, '');
 
-        if (PHP_MAJOR_VERSION >= 7)
+        if (PHP_MAJOR_VERSION >= 8)
             self::$final_text .= self::green("PHP: " . PHP_VERSION);
         else
             self::$final_text .= self::red("PHP: " . PHP_VERSION);

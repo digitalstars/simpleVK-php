@@ -240,28 +240,36 @@ class SimpleVK {
             }
         }
 
-        if(in_array('url', $category)) {
-            if (preg_match_all("/vk.com\/([a-z0-9_]{1,})?/", $msg, $matches)) {
-                $user_ids = $this->userInfo($matches[1][0]);
-                $user_ids = (isset($user_ids['id'])) ? [$user_ids] : $user_ids;
-                $affected_users['url'] = array_column($user_ids, 'id') ?? [];
-                if (count($matches[1]) != count($affected_users['url'])) { //оптимизация
-                    $group_ids = array_map(function ($el) {
-                        if (strpos($el, 'public') === 0) {
-                            return str_replace('public', 'club', $el);
-                        }
-                        return $el;
-                    }, $matches[1]);
+        if (in_array('url', $category)) {
+            if (preg_match_all("/vk.com\/(?:id([0-9]+)|([a-z0-9_.]+))/", $msg, $matches)) {
+                $ids = array_filter(array_merge($matches[1], $matches[2]));
 
-                    $group_ids = $this->groupInfo($group_ids);
-                    $group_ids = (isset($group_ids['id'])) ? [$group_ids] : $group_ids;
-                    $group_ids = array_column($group_ids, 'id') ?? [];
-                    $group_ids = array_map(function ($el) {
-                        return $el * -1;
-                    }, $group_ids);
-                    $affected_users['url'] = array_merge($affected_users['url'], $group_ids);
-                }
-                if ($affected_users['url'] == []) {
+                if (!empty($ids)) {
+                    $user_ids = $this->userInfo($ids);
+                    $user_ids = isset($user_ids['id']) ? [$user_ids] : $user_ids;
+                    $affected_users['url'] = array_column($user_ids, 'id') ?? [];
+
+                    // Удаляем уже обработанные идентификаторы пользователей из списка
+                    $ids = array_values(array_diff($ids, $affected_users['url']));
+
+                    // Обрабатываем оставшиеся идентификаторы как группы
+                    if (!empty($ids)) {
+                        $group_ids = array_map(function ($el) {
+                            return str_starts_with($el, 'public') ? str_replace('public', 'club', $el) : $el;
+                        }, $ids);
+
+                        $group_ids = $this->groupInfo($group_ids);
+                        $group_ids = isset($group_ids['id']) ? [$group_ids] : $group_ids;
+                        $group_ids = array_column($group_ids, 'id') ?? [];
+                        $group_ids = array_map(static fn($el) => $el * -1, $group_ids);
+
+                        $affected_users['url'] = array_merge($affected_users['url'], $group_ids);
+                    }
+
+                    if (empty($affected_users['url'])) {
+                        $affected_users['url'] = null;
+                    }
+                } else {
                     $affected_users['url'] = null;
                 }
             }
@@ -492,7 +500,7 @@ class SimpleVK {
             if (isset($result['error'])) {
                 return $result;
             }
-            return count($result) == 1 ? $result[0] : $result;
+            return count($result) == 1 ? $result['groups'][0] : $result['groups'];
         } catch (Exception $e) {
             return false;
         }
