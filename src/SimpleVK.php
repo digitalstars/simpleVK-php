@@ -609,7 +609,9 @@ class SimpleVK {
         $messages = [];
         if (isset($params['message'])) {
             $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
-            $messages = $this->lengthMessageProcessing($params['message']);
+            if($method == 'messages.send') {
+                $messages = $this->lengthMessageProcessing($params['message']);
+            }
         }
         if (isset($params['peer_id']) && is_array($params['peer_id'])) { //возможно везде заменить на peer_ids в методах
             $params['peer_ids'] = join(',', $params['peer_id']);

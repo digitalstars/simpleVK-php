@@ -255,9 +255,13 @@ class Message extends BaseConstructor {
         return $text + $params + $attachments + $kbd + $template + $forward;
     }
 
-    public function sendEdit($peer_id, $message_id = null, $conversation_message_id = null, $var = null) {
-        if (is_null($message_id) and is_null($conversation_message_id))
-            throw new SimpleVkException(0, "Нужно указать хотя-бы какой то из message_id");
+    public function sendEdit($peer_id = null, $message_id = null, $conversation_message_id = null, $var = null) {
+        if(!$peer_id) {
+            $this->vk->initPeerID($peer_id);
+        }
+        if(!$conversation_message_id && !$message_id) {
+            $this->vk->initConversationMsgID($conversation_message_id);
+        }
         $query = $this->assembleMsg($peer_id, $var);
 
         if (empty($query))
