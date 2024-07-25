@@ -9,6 +9,16 @@ require_once('config_simplevk.php');
 trait FileUploader {
     use Request;
 
+    /* Как работает загрузка картинок от чьего-то лица:
+       — Если ты вызвал получение сервера для загрузки с peer_id > 2e9 (беседы), то загрузит в сервер создателя беседы(пользователь или сообщество),
+          и именно этот случай багует в беседах чужих сообществ. Потому что сообщество пытается загрузить фото в чужое сообщество,
+          а такое наверно нельзя.)
+       — Если ты вызываешь с user_id, то он будет загружать в диалог этого пользователя в сообществе,
+          но только если он писал сообществу хотя бы раз
+       — Если указать 0, то будет загружать в скрытый альбом сообщества, и владелец фотки будет отображатся сообщество
+        Следовательно самый нормальный вариант, это для peer_id > 2e9 грузить от лица сообщества, а в других случаях от лица юзера
+     */
+
     private function sendFiles($url, $local_file_path_or_url, $type) {
         if (filter_var($local_file_path_or_url, FILTER_VALIDATE_URL) === false) {
             $file = realpath($local_file_path_or_url);
@@ -53,18 +63,19 @@ trait FileUploader {
     }
 
     public function getMsgAttachmentUploadImage($peer_id, $local_file_path_or_url) {
-        $upload_url = $this->getUploadServer('photos.getMessagesUploadServer', ['peer_id' => $peer_id]);
+        $params = ['peer_id' => ($peer_id > 2e9) ? 0 : $peer_id];
+        $upload_url = $this->getUploadServer('photos.getMessagesUploadServer', $params);
         return $this->uploadFile($upload_url, $local_file_path_or_url, null, 'photo');
     }
 
     public function getMsgAttachmentUploadVoice($peer_id, $local_file_path_or_url) {
-        $params = ['type' => 'audio_message', 'peer_id' => $peer_id];
+        $params = ['type' => 'audio_message', 'peer_id' => ($peer_id > 2e9) ? 0 : $peer_id];
         $upload_url = $this->getUploadServer('docs.getMessagesUploadServer', $params);
         return $this->uploadFile($upload_url, $local_file_path_or_url, 'voice', 'file');
     }
 
     public function getMsgAttachmentUploadDoc($peer_id, $local_file_path_or_url, $title = null) {
-        $params = ['type' => 'doc', 'peer_id' => $peer_id];
+        $params = ['type' => 'doc', 'peer_id' => ($peer_id > 2e9) ? 0 : $peer_id];
         $upload_url = $this->getUploadServer('docs.getMessagesUploadServer', $params);
         return $this->uploadFile($upload_url, $local_file_path_or_url, $title, 'file');
     }
