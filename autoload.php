@@ -1,6 +1,7 @@
 <?php
 namespace DigitalStars\SimpleVK;
 $path_dir =  __DIR__.'/src';
+require_once($path_dir.'/Request.php');
 require_once($path_dir.'/FileUploader.php');
 require_once($path_dir.'/BaseConstructor.php');
 require_once($path_dir.'/Carousel.php');
@@ -12,8 +13,6 @@ require_once($path_dir.'/SimpleVkException.php');
 require_once($path_dir.'/Auth.php');
 require_once($path_dir.'/LongPoll.php');
 require_once($path_dir.'/Streaming.php');
-//require_once($path_dir.'/Coin.php');
-//require_once($path_dir.'/Execute.php');
 require_once($path_dir.'/SiteAuth.php');
 require_once($path_dir.'/Bot.php');
 require_once($path_dir.'/Store.php');

@@ -17,14 +17,14 @@ class SimpleVkException extends Exception {
     public function __construct($code, $message, Throwable $previous = null) {
         if(self::$write_error === true) {
             if (!is_dir(DIRNAME . '/error')) {
-                if (mkdir(DIRNAME . '/error')) {
+                if (mkdir($concurrentDirectory = DIRNAME . '/error') || !is_dir($concurrentDirectory)) {
                     $this->printError($code, $message);
                 }
             } else
                 $this->printError($code, $message);
         }
 
-        parent::__construct(PHP_EOL . PHP_EOL . "CODE: $code" . PHP_EOL . "MESSAGE: $message" . PHP_EOL . PHP_EOL, $code, $previous);
+        parent::__construct($message, $code, $previous);
     }
 
     public static function userError(SimpleVkException $e) {
@@ -37,7 +37,7 @@ class SimpleVkException extends Exception {
 
     public static function nullError($message) {
         if (!is_dir('error')) {
-            if (mkdir('error')) {
+            if (mkdir('error') || is_dir('error')) {
                 self::writeToLog($message);
             }
         } else

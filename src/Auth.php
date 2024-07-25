@@ -7,6 +7,7 @@ use DigitalStars\simplevk\simplevk as vk;
 require_once('config_simplevk.php');
 
 class Auth {
+    use Request;
     private $login = null;
     private $pass = null;
     private $cookie = null;
@@ -229,8 +230,9 @@ class Auth {
 
     private function saveCashed() {
         if ($this->is_save) {
-            if (!is_dir(DIRNAME . "/cache"))
-                mkdir(DIRNAME . "/cache");
+            if (!is_dir(DIRNAME . "/cache") && !mkdir($concurrentDirectory = DIRNAME . "/cache") && !is_dir($concurrentDirectory)) {
+                throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
+            }
             $path = DIRNAME . "/cache/" . hash('sha256', $this->login . $this->pass) . ".php";
             file_put_contents($path, $this->cashed_salt .
                 base64_encode(
@@ -298,55 +300,50 @@ class Auth {
     }
 
     private function getCURL($url, $post_values = null, $cookie = true) {
-        if ($curl = curl_init()) {
-            curl_setopt($curl, CURLOPT_URL, $url);
-            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($curl, CURLOPT_USERAGENT, $this->useragent);
-            curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
-            if (isset(vk::$proxy['ip'])) {
-                curl_setopt($curl, CURLOPT_PROXYTYPE, vk::$proxy_types[vk::$proxy['type']]);
-                curl_setopt($curl, CURLOPT_PROXY, vk::$proxy['ip']);
-                if (isset(vk::$proxy['user_pwd'])) {
-                    curl_setopt($curl, CURLOPT_PROXYUSERPWD, vk::$proxy['user_pwd']);
-                }
+        $curl = $this->curlInit();
+
+        curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_USERAGENT, $this->useragent);
+
+        if (isset($post_values)) {
+            curl_setopt($curl, CURLOPT_POST, 1);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $post_values);
+        }
+
+        if ($cookie && isset($this->cookie)) {
+            $send_cookie = [];
+            foreach ($this->cookie as $cookie_name => $cookie_val) {
+                $send_cookie[] = "$cookie_name=$cookie_val";
             }
-            if (isset($post_values)) {
-                curl_setopt($curl, CURLOPT_POST, 1);
-                curl_setopt($curl, CURLOPT_POSTFIELDS, $post_values);
-            }
+            curl_setopt($curl, CURLOPT_COOKIE, implode('; ', $send_cookie));
+        }
 
-            if ($cookie and isset($this->cookie)) {
-                $send_cookie = [];
-                foreach ($this->cookie as $cookie_name => $cookie_val) {
-                    $send_cookie[] = "$cookie_name=$cookie_val";
-                }
-                curl_setopt($curl, CURLOPT_COOKIE, join('; ', $send_cookie));
-            }
-
-            curl_setopt($curl, CURLOPT_HEADERFUNCTION,
-                function ($curl, $header) use (&$headers) {
-                    $len = strlen($header);
-                    $header = explode(':', $header, 2);
-                    if (count($header) < 2) // ignore invalid headers
-                        return $len;
-
-                    $name = strtolower(trim($header[0]));
-                    if (isset($headers) and !array_key_exists($name, $headers))
-                        $headers[$name] = [trim($header[1])];
-                    else
-                        $headers[$name][] = trim($header[1]);
-
+        curl_setopt($curl, CURLOPT_HEADERFUNCTION,
+            static function ($curl, $header) use (&$headers) {
+                $len = strlen($header);
+                $header = explode(':', $header, 2);
+                if (count($header) < 2) { // ignore invalid headers
                     return $len;
                 }
-            );
 
-            $out = curl_exec($curl);
-            curl_close($curl);
-            if (isset($headers['set-cookie']))
-                $this->parseCookie($headers['set-cookie']);
-            return ['header' => $headers, 'body' => $out];
+                $name = strtolower(trim($header[0]));
+                if (isset($headers) && !array_key_exists($name, $headers)) {
+                    $headers[$name] = [trim($header[1])];
+                }
+                else {
+                    $headers[$name][] = trim($header[1]);
+                }
+
+                return $len;
+            }
+        );
+
+        $out = curl_exec($curl);
+        curl_close($curl);
+        if (isset($headers['set-cookie'])) {
+            $this->parseCookie($headers['set-cookie']);
         }
+        return ['header' => $headers, 'body' => $out];
     }
 
     private function parseCookie($new_cookie) {

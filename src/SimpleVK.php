@@ -7,7 +7,7 @@ use Exception;
 require_once('config_simplevk.php');
 
 class SimpleVK {
-    use ErrorHandler;
+    use ErrorHandler, Request;
 
     protected $version;
     public $data = [];
@@ -16,11 +16,7 @@ class SimpleVK {
     protected $token;
     private static $debug_mode = false;
     private static $retry_requests_processing = false;
-    private static $error_suppression = false;
     protected $auth = null;
-    protected $request_ignore_error = REQUEST_IGNORE_ERROR;
-    public static $proxy = PROXY;
-    protected static $proxy_types = ['socks4' => CURLPROXY_SOCKS4, 'socks5' => CURLPROXY_SOCKS5];
     private $is_test_len_str = true;
     protected $group_id = null;
     public $time_checker = null;
@@ -66,19 +62,8 @@ class SimpleVK {
         return $this->request($method, $args);
     }
 
-    public static function setProxy($proxy, $pass = false) {
-        self::$proxy['ip'] = $proxy;
-        self::$proxy['type'] = explode(':', $proxy)[0];
-        if ($pass)
-            self::$proxy['user_pwd'] = $pass;
-    }
-
     public static function retryRequestsProcessing($flag = true) {
         self::$retry_requests_processing = $flag;
-    }
-
-    public static function errorSuppression($flag = true) {
-        self::$error_suppression = $flag;
     }
 
     public static function disableSendOK($flag = true) {
@@ -619,47 +604,24 @@ class SimpleVK {
             unset($params['peer_id']);
         }
 
-        $run_request = function ($method, $params) {
-            for ($iteration = 0; $iteration < 6; ++$iteration) {
-                try {
-                    $time_start2 = microtime(true);
-                    $return = $this->request_core($method, $params);
-                    $this->time_checker += (microtime(true) - $time_start2);
-                    return $return;
-                } catch (SimpleVkException $e) {
-                    if (in_array($e->getCode(), $this->request_ignore_error)) {
-                        sleep(1);
-                        $iteration = 0;
-                        continue;
-                    } else if ($e->getCode() == 5 and isset($this->auth) and $iteration != 0) {
-                        $this->auth->reloadToken();
-                        $this->token = $this->auth->getAccessToken();
-                        continue;
-                    } else if ($e->getCode() == 77777) {
-                        if ($iteration == 5) {
-                            $error_message = "Запрос к вк вернул пустоту. Завершение 5 попыток отправки\n
-                                  Метод:$method\nПараметры:\n" . json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                            throw new SimpleVkException(77777, $error_message);
-                        }
-                        continue;
-                    }
-                    $this->time_checker += (microtime(true) - $time_start2);
-                    throw new Exception($e->getMessage(), $e->getCode());
-                }
-            }
-        };
+        $params['access_token'] = $this->token;
+        $params['v'] = $this->version;
+        if (!is_null($this->group_id) && empty($params['group_id'])) {
+            $params['group_id'] = $this->group_id; //а надо ли
+        }
+        $url = $this->api_url . $method;
 
         if(!empty($messages)) {
             foreach ($messages as $message) {
                 $params['message'] = $message;
-                return $run_request($method, $params);
+                $result = $this->runRequestWithAttempts($url, $params, $method);
             }
         } else {
-            return $run_request($method, $params);
+            $result = $this->runRequestWithAttempts($url, $params, $method);
         }
 
         $this->time_checker += (microtime(true) - $time_start);
-        return false;
+        return $result;
     }
 
     public function placeholders($message, $id = null) {
@@ -773,65 +735,11 @@ class SimpleVK {
             throw new SimpleVkException(0, "eventAnswerSnackbar можно использовать только при событии message_event");
     }
 
-    protected function curlInit() {
-        if (function_exists('curl_init')) {
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-            if (isset(self::$proxy['ip'])) {
-                curl_setopt($ch, CURLOPT_PROXYTYPE, self::$proxy_types[self::$proxy['type']]);
-                curl_setopt($ch, CURLOPT_PROXY, self::$proxy['ip']);
-                if (isset(self::$proxy['user_pwd'])) {
-                    curl_setopt($ch, CURLOPT_PROXYUSERPWD, self::$proxy['user_pwd']);
-                }
-            }
-            return $ch;
-        } else {
-            throw new SimpleVkException(77777, 'Curl недоступен. Прекращение выполнения скрипта');
-        }
-    }
-
     protected static function parseUrl($url) {
         if($url) {
             $url = preg_replace("!.*?/!", '', $url);
         }
         return $url === '' ? false : $url;
-    }
-
-    protected function request_core($method, $params = []) {
-//        print_r($params);
-        $params['access_token'] = $this->token;
-        $params['v'] = $this->version;
-        if (!is_null($this->group_id) and empty($params['group_id']))
-            $params['group_id'] = $this->group_id;
-        $url = $this->api_url . $method;
-
-        $ch = $this->curlInit();
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type:multipart/form-data'
-        ]);
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
-        $result = json_decode(curl_exec($ch), True);
-        curl_close($ch);
-
-        if (!isset($result)) {
-            throw new SimpleVkException(77777, 'Запрос к вк вернул пустоту.');
-        }
-        if (isset($result['error'])) {
-            $params['access_token'] = substr($params['access_token'], 0, 10).'****';
-            $result['error']['request_params'] = $params;
-            if (self::$error_suppression) {
-                return $result;
-            } else {
-                throw new SimpleVkException($result['error']['error_code'], print_r($result['error'], 1) . PHP_EOL);
-            }
-        }
-        if (isset($result['response']))
-            return $result['response'];
-        else
-            return $result;
     }
 
     protected function debugRun() {

@@ -272,12 +272,11 @@ class Diagnostics {
         self::module('curl');
         self::module('json');
         self::module('mbstring');
+        self::module('fileinfo');
         if (PHP_SAPI == 'cli') {
             self::module('pcntl');
             self::module('posix');
         }
-        self::module('fileinfo');
-        self::module('iconv');
     }
 
     private static function checkNoImportantModules() {

@@ -22,7 +22,7 @@ class Post extends BaseConstructor {
             if ($publish_date >= time())
                 $params['publish_date'] = $publish_date;
             else
-                throw new VkApiException('Неверно указан $publish_date');
+                throw new SimpleVkException(0, 'Неверно указан $publish_date');
         }
 
         if (isset($this->config['real_id']) and $this->config['real_id'] != 0)

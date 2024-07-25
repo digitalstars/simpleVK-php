@@ -9,44 +9,78 @@ trait ErrorHandler {
     private $user_error_hendler_or_ids = null;
     private $printException_used = false;
 
+    private function defaultErrorLevelMap(): array {
+        return [
+            E_ERROR             => 'CRITICAL',         // Критическая ошибка
+            E_WARNING           => 'WARNING',          // Предупреждение
+            E_PARSE             => 'ERROR',            // Синтаксическая ошибка
+            E_NOTICE            => 'NOTICE',           // Замечание
+            E_CORE_ERROR        => 'CRITICAL',         // Критическая ошибка в ядре
+            E_CORE_WARNING      => 'WARNING',          // Предупреждение в ядре
+            E_COMPILE_ERROR     => 'CRITICAL',         // Ошибка компиляции
+            E_COMPILE_WARNING   => 'WARNING',          // Предупреждение компиляции
+            E_USER_ERROR        => 'ERROR',            // Ошибка пользователя
+            E_USER_WARNING      => 'WARNING',          // Предупреждение пользователя
+            E_USER_NOTICE       => 'NOTICE',           // Замечание пользователя
+            E_STRICT            => 'NOTICE',           // Строгие предупреждения
+            E_RECOVERABLE_ERROR => 'ERROR',            // Ошибка, которую можно восстановить
+            E_DEPRECATED        => 'NOTICE',           // Устаревшее предупреждение
+            E_USER_DEPRECATED   => 'NOTICE',           // Устаревшее предупреждение пользователя
+        ];
+    }
+
+    private function errorCodesMap(): array {
+        return [
+            E_ERROR              => 'E_ERROR',
+            E_WARNING            => 'E_WARNING',
+            E_PARSE              => 'E_PARSE',
+            E_NOTICE             => 'E_NOTICE',
+            E_CORE_ERROR         => 'E_CORE_ERROR',
+            E_CORE_WARNING       => 'E_CORE_WARNING',
+            E_COMPILE_ERROR      => 'E_COMPILE_ERROR',
+            E_COMPILE_WARNING    => 'E_COMPILE_WARNING',
+            E_USER_ERROR         => 'E_USER_ERROR',
+            E_USER_WARNING       => 'E_USER_WARNING',
+            E_USER_NOTICE        => 'E_USER_NOTICE',
+            E_STRICT             => 'E_STRICT',
+            E_RECOVERABLE_ERROR  => 'E_RECOVERABLE_ERROR',
+            E_DEPRECATED         => 'E_DEPRECATED',
+            E_USER_DEPRECATED    => 'E_USER_DEPRECATED',
+        ];
+    }
+
     private function user_error_handler($type, $message, $file, $line, $code = null, $exception = null) {
-        if (!is_numeric($code))
+        if (!is_numeric($code)) {
             $code = null;
+        }
         // если ошибка попадает в отчет (при использовании оператора "@" error_reporting() вернет 0)
         if (error_reporting() & $type) {
-            $errors = [
-                E_ERROR => 'E_ERROR',
-                E_WARNING => 'E_WARNING',
-                E_PARSE => 'E_PARSE',
-                E_NOTICE => 'E_NOTICE',
-                E_CORE_ERROR => 'E_CORE_ERROR',
-                E_CORE_WARNING => 'E_CORE_WARNING',
-                E_COMPILE_ERROR => 'E_COMPILE_ERROR',
-                E_COMPILE_WARNING => 'E_COMPILE_WARNING',
-                E_USER_ERROR => 'E_USER_ERROR',
-                E_USER_WARNING => 'E_USER_WARNING',
-                E_USER_NOTICE => 'E_USER_NOTICE',
-                E_STRICT => 'E_STRICT',
-                E_RECOVERABLE_ERROR => 'E_RECOVERABLE_ERROR',
-                E_DEPRECATED => 'E_DEPRECATED',
-                E_USER_DEPRECATED => 'E_USER_DEPRECATED',
-            ];
+            $error_type = $this->errorCodesMap()[$type];
+            $error_level = $this->defaultErrorLevelMap()[$type];
 
-            $error_type = $errors[$type]."[$type]";
-            if ($error_type == 'E_ERROR[1]') {
-                $error_type = '‼Fatal error: ';
+            switch ($error_level) {
+                case 'CRITICAL': $error_level_str = '‼Fatal Error: '; break;
+                case 'ERROR': $error_level_str = '‼Fatal Error: '; break;
+                case 'WARNING': $error_level_str = '⚠️Warning: '; break;
+                case 'NOTICE': $error_level_str = '⚠️Notice: '; break;
             }
 
             if($this->printException_used) {
-                $msg = "$error_type $message";
+                $msg = "$error_level_str $message";
                 $this->printException_used = false;
             } else {
-                $msg = "$error_type $message ($file на $line строке)";
+                if (!is_readable($file)) {
+                    $code_snippet = 'Файл недоступен.';
+                } else {
+                    $file_lines = file($file);
+                    $code_snippet = $this->getCodeSnippet($file_lines, $line);
+                }
+                $msg = "$error_level_str $message ($file на $line строке)\n➡$code_snippet";
             }
 
             if (is_callable($this->user_error_hendler_or_ids)) {
-                call_user_func_array($this->user_error_hendler_or_ids, [$errors[$type], $message, $file, $line, $msg, $code, $exception]);
-            } else { //тут может не отправиться из-за того, что сообщение слишком длинное
+                call_user_func_array($this->user_error_hendler_or_ids, [$error_type, $message, $file, $line, $msg, $code, $exception]);
+            } else {
                 $this->request('messages.send', ['peer_ids' => $this->user_error_hendler_or_ids, 'message' => $msg, 'random_id' => 0, 'dont_parse_links' => 1]);
             }
         }
@@ -85,6 +119,18 @@ trait ErrorHandler {
         return $this;
     }
 
+    private function getCodeSnippet($file_lines, $line_number, $padding = 0) {
+        $start = max(0, $line_number - $padding - 1);
+        $end = min(count($file_lines), $line_number + $padding);
+
+        $snippet = '';
+        for ($i = $start; $i < $end; $i++) {
+            $snippet .= ($i + 1) . ': ' . $file_lines[$i];
+        }
+
+        return $snippet;
+    }
+
     private function normalization($message) {
         $message = str_replace('Stack trace', 'STACK TRACE', $message);
         $message = str_replace("Array\n", 'Array ', $message);
@@ -111,19 +157,46 @@ trait ErrorHandler {
             $ex = explode("vendor/", $file, 2);
             $trace_zero = "#0 ../".$ex[1]."($line)\n";
         } else {
-            $trace_zero = "➡ #0 ".$file."($line)\n";
+            $files_code = [];
+            if (!is_readable($file)) {
+                $code_snippet = 'Файл недоступен.';
+            } else {
+                $file_lines = file($file);
+                $files_code[$file] = $file_lines;
+                $code_snippet = $this->getCodeSnippet($file_lines, $line);
+            }
+
+            $trace_zero = "➡ #0 " . $file . "($line)\n{$code_snippet}\n";
         }
 
         $trace = "$trace_zero\n";
         foreach ($exception->getTrace() as $num => $value) {
+            $need_ext_trace = 0;
             $new_num = $num + 1;
-            $str_file = $value['file'] ?? 'unknown file';
-            $str_line = $value['line'] ?? '?';
-            if(strpos($str_file, 'vendor/') !== FALSE) {
-                $ex = explode("vendor/", $str_file, 2);
-                $trace .= "#{$new_num} ../".$ex[1]."($str_line)\n";
+            $file = $value['file'] ?? 'unknown file';
+            $line = $value['line'] ?? '?';
+            if(strpos($file, 'vendor/') !== FALSE) {
+                $ex = explode("vendor/", $file, 2);
+                $trace .= "#{$new_num} ../".$ex[1]."($line)\n";
             } else {
-                $trace .= "➡ #{$new_num} ".$str_file."($str_line)\n";
+                if(!isset($files_code[$file])) {
+                    if ($file == 'unknown file' || !is_readable($file)) {
+                        $file = 'Файл недоступен.';
+                        $file_lines = [];
+                    } else {
+                        $file_lines = file($file);
+                        $files_code[$file] = $file_lines;
+                    }
+                } else {
+                    $file_lines = $files_code[$file];
+                }
+                if(is_numeric($line) && is_array($file_lines)) {
+                    $code_snippet = $this->getCodeSnippet($file_lines, $line);
+                    $trace .= "➡ #{$new_num} ".$file."($line)\n{$code_snippet}\n";
+                } else {
+                    $need_ext_trace = 1;
+                    $trace .= "➡ #{$new_num} ".$file."($line)\n";
+                }
             }
 
             $type = $value['type'] ?? '';
@@ -138,7 +211,7 @@ trait ErrorHandler {
             // Add arguments to the trace
             $args = '';
             if (!empty($value['args'])) {
-                $args = array_map(function ($arg) {
+                $args = array_map(static function ($arg) {
                     if (is_object($arg)) {
                         return get_class($arg);
                     }
@@ -152,7 +225,9 @@ trait ErrorHandler {
                 $args = implode(', ', $args);
             }
 
-            $trace .= "{$class}{$type}{$function}($args)\n\n";
+            if(strpos($file, 'vendor/') !== FALSE || $need_ext_trace) {
+                $trace .= "{$class}{$type}{$function}($args)\n\n";
+            }
         }
         $message .= "\n\n$trace";
         $this->user_error_handler(1, $message, $file, $line, $code, $exception); // запускаем обработчик ошибок

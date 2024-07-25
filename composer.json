@@ -10,8 +10,7 @@
         "ext-mbstring": "*",
         "ext-pcntl": "*",
         "ext-posix": "*",
-        "ext-fileinfo": "*",
-        "ext-iconv": "*"
+        "ext-fileinfo": "*"
     },
     "autoload": {
         "psr-4": {

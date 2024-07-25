@@ -255,12 +255,12 @@ class Message extends BaseConstructor {
         return $text + $params + $attachments + $kbd + $template + $forward;
     }
 
-    public function sendEdit($peer_id = null, $message_id = null, $conversation_message_id = null, $var = null) {
+    public function sendEdit($peer_id = null, $message_id = null, $cmid = null, $var = null) {
         if(!$peer_id) {
             $this->vk->initPeerID($peer_id);
         }
-        if(!$conversation_message_id && !$message_id) {
-            $this->vk->initConversationMsgID($conversation_message_id);
+        if($cmid == null && $message_id == null) {
+            $this->vk->initConversationMsgID($cmid);
         }
         $query = $this->assembleMsg($peer_id, $var);
 
@@ -268,7 +268,7 @@ class Message extends BaseConstructor {
             $result = null;
         else {
             $message_id_key = is_null($message_id) ? 'conversation_message_id' : 'message_id';
-            $message_id = $message_id ?? $conversation_message_id;
+            $message_id = $message_id ?? $cmid;
             $result = $this->request('messages.edit', ['peer_id' => $peer_id, $message_id_key => $message_id] + $query);
         }
         $this->postProcessing($peer_id, $message_id ?? $result, $var);
