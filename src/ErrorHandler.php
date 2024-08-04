@@ -7,7 +7,7 @@ require_once('config_simplevk.php');
 trait ErrorHandler {
 
     private $user_error_hendler_or_ids = null;
-    private $printException_used = false;
+    private bool $printException_used = false;
 
     private function defaultErrorLevelMap(): array {
         return [
@@ -58,12 +58,12 @@ trait ErrorHandler {
             $error_type = $this->errorCodesMap()[$type];
             $error_level = $this->defaultErrorLevelMap()[$type];
 
-            switch ($error_level) {
-                case 'CRITICAL': $error_level_str = '‼Fatal Error: '; break;
-                case 'ERROR': $error_level_str = '‼Fatal Error: '; break;
-                case 'WARNING': $error_level_str = '⚠️Warning: '; break;
-                case 'NOTICE': $error_level_str = '⚠️Notice: '; break;
-            }
+            $error_level_str = match ($error_level) {
+                'ERROR', 'CRITICAL' => '‼Fatal Error: ',
+                'WARNING' => '⚠️Warning: ',
+                'NOTICE' => '⚠️Notice: ',
+                default => '‼Unknown Error: ',
+            };
 
             if($this->printException_used) {
                 $msg = "$error_level_str $message";
@@ -79,9 +79,10 @@ trait ErrorHandler {
             }
 
             if (is_callable($this->user_error_hendler_or_ids)) {
-                call_user_func_array($this->user_error_hendler_or_ids, [$error_type, $message, $file, $line, $msg, $code, $exception]);
+                call_user_func($this->user_error_hendler_or_ids, $error_type, $message, $file, $line, $msg, $code, $exception);
             } else {
-                $this->request('messages.send', ['peer_ids' => $this->user_error_hendler_or_ids, 'message' => $msg, 'random_id' => 0, 'dont_parse_links' => 1]);
+                $peer_ids = join(',', $this->user_error_hendler_or_ids);
+                $this->request('messages.send', ['peer_ids' => $peer_ids, 'message' => $msg, 'random_id' => 0, 'dont_parse_links' => 1]);
             }
         }
         return TRUE; // не запускаем внутренний обработчик ошибок PHP
@@ -137,10 +138,10 @@ trait ErrorHandler {
         $message = str_replace("\n)", ')', $message);
         $message = str_replace("\n#", "\n\n#", $message);
         $message = str_replace("): ", "): \n", $message);
-        $message = preg_replace_callback("/\n */", function($search) {
+        $message = preg_replace_callback("/\n */", static function($search) {
             return "\n&#8288;" . str_repeat("&#8199;", ceil((mb_strlen($search[0])-1)/2));
         }, $message);
-        $message = preg_replace_callback('/(?:\\\\x)([0-9A-Fa-f]+)/', function($matched) {
+        $message = preg_replace_callback('/(?:\\\\x)([0-9A-Fa-f]+)/', static function($matched) {
             return chr(hexdec($matched[1]));
         }, $message);
         return $message;
@@ -153,7 +154,7 @@ trait ErrorHandler {
         $line = $this->normalization($exception->getLine());
         $code = $exception->getCode();
 
-        if(strpos($file, 'vendor/') !== FALSE) {
+        if(str_contains($file, 'vendor/')) {
             $ex = explode("vendor/", $file, 2);
             $trace_zero = "#0 ../".$ex[1]."($line)\n";
         } else {
@@ -175,7 +176,7 @@ trait ErrorHandler {
             $new_num = $num + 1;
             $file = $value['file'] ?? 'unknown file';
             $line = $value['line'] ?? '?';
-            if(strpos($file, 'vendor/') !== FALSE) {
+            if(str_contains($file, 'vendor/')) {
                 $ex = explode("vendor/", $file, 2);
                 $trace .= "#{$new_num} ../".$ex[1]."($line)\n";
             } else {
@@ -205,8 +206,7 @@ trait ErrorHandler {
                 $function = "anonFunc";
             }
             $class = $value['class'] ?? '';
-            $class = str_replace("DigitalStars\DataBase\\", "", $class);
-            $class = str_replace("DigitalStars\SimpleVK\\", "", $class);
+            $class = str_replace(["DigitalStars\DataBase\\", "DigitalStars\SimpleVK\\"], "", $class);
 
             // Add arguments to the trace
             $args = '';
@@ -225,7 +225,7 @@ trait ErrorHandler {
                 $args = implode(', ', $args);
             }
 
-            if(strpos($file, 'vendor/') !== FALSE || $need_ext_trace) {
+            if($need_ext_trace || str_contains($file, 'vendor/')) {
                 $trace .= "{$class}{$type}{$function}($args)\n\n";
             }
         }

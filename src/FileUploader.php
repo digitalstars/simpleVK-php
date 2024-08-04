@@ -2,7 +2,7 @@
 
 namespace DigitalStars\SimpleVK;
 
-use CURLFile, Exception;
+use CURLFile;
 
 require_once('config_simplevk.php');
 
@@ -35,6 +35,7 @@ trait FileUploader {
             }
             $mime_type = mime_content_type($tmp_filename);
             $post_fields = [$type => new CURLFile($tmp_filename, $mime_type, 'file.' . explode('/', $mime_type)[1])];
+            fclose($tmp_file);
         }
 
         return $this->runRequestWithAttempts($url, $post_fields);
