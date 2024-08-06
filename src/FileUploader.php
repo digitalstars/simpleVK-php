@@ -20,25 +20,62 @@ trait FileUploader {
      */
 
     private function sendFiles($url, $local_file_path_or_url, $type) {
+        $tmp_file = null;
+
         if (filter_var($local_file_path_or_url, FILTER_VALIDATE_URL) === false) {
             $file = realpath($local_file_path_or_url);
             if (!is_readable($file)) {
                 throw new SimpleVkException(0, "Файл для загрузки не найден: $file");
             }
+
+            $mime_type = mime_content_type($file);
+            if ($type == 'photo' && !str_starts_with($mime_type, 'image/')) {
+                throw new SimpleVkException(0, "Ошибка загрузки файла: файл не является изображением: $file. MimeType: $mime_type");
+            }
+
             $post_fields = [$type => new CURLFile($file)];
         } else {
             $tmp_file = tmpfile();
             $tmp_filename = stream_get_meta_data($tmp_file)['uri'];
-            if (!copy($local_file_path_or_url, $tmp_filename)) {
+
+            $ch = curl_init($local_file_path_or_url);
+            $fp = fopen($tmp_filename, 'wb');
+
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_FILE, $fp);
+            curl_setopt($ch, CURLOPT_FAILONERROR, true);
+
+            $result = curl_exec($ch);
+            if (!$result) {
+                fclose($fp);
                 fclose($tmp_file);
-                throw new SimpleVkException(0, "Ошибка скачивания файла: $local_file_path_or_url");
+                throw new SimpleVkException(0, "Ошибка скачивания файла: " . curl_error($ch));
             }
+
+            curl_close($ch);
+            fclose($fp);
+
             $mime_type = mime_content_type($tmp_filename);
+            if ($type == 'photo' && !str_starts_with($mime_type, 'image/')) {
+                fclose($tmp_file);
+                throw new SimpleVkException(0, "Ошибка загрузки файла: файл не является изображением: $local_file_path_or_url. MimeType: $mime_type");
+            }
+
             $post_fields = [$type => new CURLFile($tmp_filename, $mime_type, 'file.' . explode('/', $mime_type)[1])];
-            fclose($tmp_file);
         }
 
-        return $this->runRequestWithAttempts($url, $post_fields);
+        try {
+            return $this->runRequestWithAttempts($url, $post_fields);
+        } catch (SimpleVkException $e) {
+            throw $e;
+        } finally {
+            if (is_resource($tmp_file)) {
+                fclose($tmp_file);
+            }
+        }
     }
 
     private function saveFile($response, $fileType, $title, $ex_params = []) {

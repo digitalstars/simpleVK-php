@@ -95,21 +95,34 @@ trait Request {
                         'access_token' => $access_token,
                         'v' => $v
                     ] + $params;
+            } else {
+                $params['url'] = $url;
             }
 
-            if($is_json_error) {
+            if (!isset($result)) {
+                $result['error']['error_msg'] = 'Запрос к VK API вернул пустоту';
+                $error_code = 77777;
+            } else if($is_json_error) {
                 $result['error']['error_msg'] = 'Запрос к VK API вернул невалидный JSON';
                 $result['error']['json'] = $json_result;
                 $error_code = 77778;
-            } else if (!isset($result)) {
-                $result['error']['error_msg'] = 'Запрос к VK API вернул пустоту';
-                $error_code = 77777;
             } else {
-                $error_code = $result['error']['error_code'];
+                $error_code = $result['error']['error_code'] ?? 0;
+            }
+
+            if(is_string($result['error'])) {
+                $result['error'] = $result;
             }
 
             $result['error']['request_params'] = $params;
-            $error_print = print_r($result['error'], true);
+            if(is_array($result['error'])) {
+                $error_print = print_r($result['error'], true);
+            } else if(is_array($result)) {
+                $error_print = print_r($result, true);
+            } else {
+                $error_print = $result;
+            }
+
             throw new SimpleVkException($error_code, "VK API Error!\n$error_print");
         }
 
