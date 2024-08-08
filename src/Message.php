@@ -293,7 +293,8 @@ class Message extends BaseConstructor {
         if (empty($query)) {
             $result = null;
         } else {
-            $result = $this->request('messages.send', ['peer_ids' => $id, 'random_id' => 0] + $query);
+            $ids = is_array($id) ? join(',', $id) : $id;
+            $result = $this->request('messages.send', ['peer_ids' => $ids, 'random_id' => 0] + $query);
             if(!is_array($id)) {
                 $result = $result[0]['conversation_message_id'] ?? null;
             } else {

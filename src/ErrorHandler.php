@@ -82,7 +82,7 @@ trait ErrorHandler {
                 call_user_func($this->user_error_hendler_or_ids, $error_type, $message, $file, $line, $msg, $code, $exception);
             } else {
                 $peer_ids = join(',', $this->user_error_hendler_or_ids);
-                $this->request('messages.send', ['peer_ids' => $peer_ids, 'message' => $msg, 'random_id' => 0, 'dont_parse_links' => 1]);
+                $this->request('messages.send', ['peer_ids' => $peer_ids, 'message' => $msg, 'random_id' => 0, 'dont_parse_links' => 1], false);
             }
         }
         return TRUE; // не запускаем внутренний обработчик ошибок PHP
@@ -129,7 +129,7 @@ trait ErrorHandler {
             $snippet .= ($i + 1) . ': ' . $file_lines[$i];
         }
 
-        return $snippet;
+        return trim($snippet);
     }
 
     private function normalization($message) {

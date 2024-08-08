@@ -590,11 +590,13 @@ class SimpleVK {
         return $this;
     }
 
-    public function request($method, $params = []) {
+    public function request($method, $params = [], $use_placeholders = true) {
         $time_start = microtime(true);
         $messages = [];
         if (isset($params['message'])) {
-            $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
+            if($use_placeholders) {
+                $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
+            }
             if($method == 'messages.send') {
                 $messages = $this->lengthMessageProcessing($params['message']);
             }
