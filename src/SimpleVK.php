@@ -32,10 +32,6 @@ class SimpleVK {
             exit('ok');
         }
 
-        if (PHP_VERSION_ID < 80000) {
-            throw new Exception('SimpleVK3 требует PHP версии 8.0.0 или выше. Вы используете версию ' . PHP_VERSION);
-        }
-
         if ((double)($version) <  5.139) {
             throw new Exception('SimpleVK3 работает с VK API версиями 5.139 или выше. Вы запустили с v' . $version);
         }
@@ -626,53 +622,86 @@ class SimpleVK {
         return $result;
     }
 
-    public function placeholders($message, $id = null) {
-        $tag = ['!fn', '!ln', '!full', 'fn', 'ln', 'full'];
-
-        if ($id >= 2e9) {
-            $this->initUserID($id);
+    public function placeholders($message, $vk_id = null) {
+        if (!$vk_id) {
+            $this->initUserID($vk_id);
         }
 
-        if(!is_string($message)) {
+        if (!is_string($message)) {
             return $message;
         }
 
-        if (strpos($message, '~') !== false) {
-            return preg_replace_callback(
-                "|~(.*?)~|",
-                function ($matches) use ($tag, $id) {
-                    $ex1 = explode('|', $matches[1]);
-                    if (isset($ex1[1])) {
-                        $id = $ex1[1];
+        $user_ids = [];
+        $group_ids = [];
+
+        // Шаблон для поиска всех вхождений вида ~тег|id~
+        if (preg_match_all("|~(.*?)~|", $message, $matches)) {
+            foreach ($matches[1] as $match) {
+                $ex1 = explode('|', $match);
+                $tag = $ex1[0];
+
+                if (isset($ex1[1])) {
+                    $vk_id = $ex1[1];
+                }
+
+                // Если это один из тегов, то добавляем в соответствующий массив
+                if (in_array($tag, ['!fn', '!ln', '!full', 'fn', 'ln', 'full'])) {
+                    if ($vk_id > 0) {
+                        $user_ids[] = $vk_id;
+                    } elseif ($vk_id < 0) {
+                        $group_ids[] = substr($vk_id, 1); // Убираем '-' перед group_id
                     }
-
-                    if (in_array($ex1[0], $tag)) {
-                        if (!$id) {
-                            return $matches[1];
-                        }
-
-                        if ($id > 0) {
-                            $data = $this->userInfo($id);
-                            $f = $data['first_name'];
-                            $l = $data['last_name'];
-                            $replace = ["@id{$id}($f)", "@id{$id}($l)", "@id{$id}($f $l)", $f, $l, "$f $l"];
-                            return str_replace($tag, $replace, $ex1[0]);
-                        }
-
-                        if ($id < 0) {
-                            $group_id = substr($id, 1);
-                            $group_name = $this->request('groups.getById', ['group_id' => $group_id])[0]['name'];
-                            return "@club{$group_id}({$group_name})";
-                        }
-
-                    }
-
-                    return false;
-
-                }, $message);
+                }
+            }
         }
 
-        return $message;
+        $user_cache = [];
+        $group_cache = [];
+
+        if (!empty($user_ids)) {
+            $user_infos = $this->request('users.get', ['user_ids' => implode(',', $user_ids)]);
+            foreach ($user_infos as $user_info) {
+                $user_cache[$user_info['id']] = $user_info;
+            }
+        }
+
+        if (!empty($group_ids)) {
+            $group_infos = $this->request('groups.getById', ['group_ids' => implode(',', $group_ids)])['groups'] ?? [];
+            foreach ($group_infos as $group_info) {
+                $group_cache[$group_info['id']] = $group_info;
+            }
+        }
+
+        // Замена тегов в тексте
+        return preg_replace_callback(
+            "|~(.*?)~|",
+            static function ($matches) use ($user_cache, $group_cache) {
+                $tag = ['!fn', '!ln', '!full', 'fn', 'ln', 'full'];
+                $ex1 = explode('|', $matches[1]);
+                $vk_id = $ex1[1] ?? null;
+
+                if ($vk_id && in_array($ex1[0], $tag)) {
+                    if ($vk_id > 0 && isset($user_cache[$vk_id])) {
+                        $data = $user_cache[$vk_id];
+                        $f = $data['first_name'];
+                        $l = $data['last_name'];
+                        $replace = ["@id{$vk_id}($f)", "@id{$vk_id}($l)", "@id{$vk_id}($f $l)", $f, $l, "$f $l"];
+                        return str_replace($tag, $replace, $ex1[0]);
+                    }
+
+                    if ($vk_id < 0) {
+                        $group_id = substr($vk_id, 1);
+                        if (isset($group_cache[$group_id])) {
+                            $group_name = $group_cache[$group_id]['name'];
+                            return "@club{$group_id}({$group_name})";
+                        }
+                    }
+                }
+
+                return $matches[0];
+            },
+            $message
+        );
     }
 
     protected function getPayload() {

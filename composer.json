@@ -13,6 +13,9 @@
         "ext-fileinfo": "*"
     },
     "autoload": {
+        "files": [
+            "src/Compatibility.php"
+        ],
         "psr-4": {
             "DigitalStars\\SimpleVK\\": "src/"
         }

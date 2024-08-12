@@ -10,7 +10,7 @@ trait Request {
     protected static array $proxy = [];
     protected static array $proxy_types = ['http' => CURLPROXY_HTTP, 'socks4' => CURLPROXY_SOCKS4, 'socks5' => CURLPROXY_SOCKS5];
     protected static bool $error_suppression = false;
-    protected array $error_codes_for_many_try = [77777]+ERROR_CODES_FOR_MANY_TRY;
+    protected array $error_codes_for_many_try = [77777] + ERROR_CODES_FOR_MANY_TRY;
     protected function curlInit() {
         if (!function_exists('curl_init')) {
             throw new SimpleVkException(77779, 'Curl недоступен. Прекращение выполнения скрипта');
@@ -55,7 +55,7 @@ trait Request {
                     continue;
                 }
 //                $this->time_checker += (microtime(true) - $time_start2);
-                throw new Exception($e->getMessage(), $e->getCode());
+                throw new SimpleVkException($e->getMessage(), $e->getCode());
             }
         }
         return null;
