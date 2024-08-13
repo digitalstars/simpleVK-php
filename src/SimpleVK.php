@@ -622,9 +622,9 @@ class SimpleVK {
         return $result;
     }
 
-    public function placeholders($message, $vk_id = null) {
-        if (!$vk_id) {
-            $this->initUserID($vk_id);
+    public function placeholders($message, $current_vk_id = null) {
+        if (!$current_vk_id) {
+            $this->initUserID($current_vk_id);
         }
 
         if (!is_string($message)) {
@@ -633,19 +633,17 @@ class SimpleVK {
 
         $user_ids = [];
         $group_ids = [];
+        $tags = ['!fn', '!ln', '!full', 'fn', 'ln', 'full'];
 
         // Шаблон для поиска всех вхождений вида ~тег|id~
         if (preg_match_all("|~(.*?)~|", $message, $matches)) {
             foreach ($matches[1] as $match) {
                 $ex1 = explode('|', $match);
                 $tag = $ex1[0];
-
-                if (isset($ex1[1])) {
-                    $vk_id = $ex1[1];
-                }
+                $vk_id = $ex1[1] ?? $current_vk_id;
 
                 // Если это один из тегов, то добавляем в соответствующий массив
-                if (in_array($tag, ['!fn', '!ln', '!full', 'fn', 'ln', 'full'])) {
+                if (in_array($tag, $tags)) {
                     if ($vk_id > 0) {
                         $user_ids[] = $vk_id;
                     } elseif ($vk_id < 0) {
@@ -675,18 +673,18 @@ class SimpleVK {
         // Замена тегов в тексте
         return preg_replace_callback(
             "|~(.*?)~|",
-            static function ($matches) use ($user_cache, $group_cache) {
-                $tag = ['!fn', '!ln', '!full', 'fn', 'ln', 'full'];
+            static function ($matches) use ($user_cache, $group_cache, $current_vk_id, $tags) {
                 $ex1 = explode('|', $matches[1]);
-                $vk_id = $ex1[1] ?? null;
+                $tag = $ex1[0];
+                $vk_id = $ex1[1] ?? $current_vk_id;
 
-                if ($vk_id && in_array($ex1[0], $tag)) {
+                if ($vk_id && in_array($tag, $tags)) {
                     if ($vk_id > 0 && isset($user_cache[$vk_id])) {
                         $data = $user_cache[$vk_id];
                         $f = $data['first_name'];
                         $l = $data['last_name'];
                         $replace = ["@id{$vk_id}($f)", "@id{$vk_id}($l)", "@id{$vk_id}($f $l)", $f, $l, "$f $l"];
-                        return str_replace($tag, $replace, $ex1[0]);
+                        return str_replace($tags, $replace, $tag);
                     }
 
                     if ($vk_id < 0) {
