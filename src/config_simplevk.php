@@ -2,7 +2,7 @@
 
 namespace DigitalStars\SimpleVK;
 
-const SIMPLEVK_VERSION = '3.1.9';
+const SIMPLEVK_VERSION = '3.1.10';
 // массив кодов ошибок ВК, при которых идет 5 попыток выполнить этот запрос с перерывом в 10 секунд
 const ERROR_CODES_FOR_MANY_TRY = [
     1, //Произошла неизвестная ошибка.
@@ -11,6 +11,7 @@ const ERROR_CODES_FOR_MANY_TRY = [
     10, //Произошла внутренняя ошибка сервера (Internal server error)
     14, //Требуется ввод кода с картинки (Captcha)
     38, //превышение лимита запросов (вроде бы)
+    40, //Unknown group: could not get current group (рандомная ошибка связанная с messages.send)
     121, //Invalid hash при загрузке картинок
 ];
 // максимальное количество попыток загрузки файла

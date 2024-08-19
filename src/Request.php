@@ -55,7 +55,7 @@ trait Request {
                     continue;
                 }
 //                $this->time_checker += (microtime(true) - $time_start2);
-                throw new SimpleVkException($e->getMessage(), $e->getCode());
+                throw new SimpleVkException($e->getCode(), $e->getMessage());
             }
         }
         return null;

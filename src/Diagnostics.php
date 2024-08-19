@@ -344,8 +344,8 @@ class Diagnostics {
                 $meminfo = [];
                 foreach ($data as $line) {
                     $ex = @explode(":", $line);
-                    $key = $ex[0] ?? null;
-                    $val = $ex[1] ?? null;
+                    $key = $ex[0] ?? '';
+                    $val = $ex[1] ?? '';
                     $val = explode(' ',trim($val))[0] ?? null;
                     if($val)
                         $meminfo[$key] = $val;
