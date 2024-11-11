@@ -155,10 +155,6 @@ class LongPoll extends SimpleVK {
         return $result;
     }
 
-    function print2($var) {
-        print $var . PHP_EOL;
-    }
-
 //    private function parseBeginningMessageStruct($data) {
 //        $this->data['object']['id'] = $data[1];
 //        $this->data['object']['peer_id'] = $data[3];
@@ -252,7 +248,7 @@ class LongPoll extends SimpleVK {
             }
 
             $this->data['object']['attachments'] = $data[7] ?? null;
-            $this->data['object']['random_id'] = (isset($data[8]) && !empty($data[8])) ? $data[8] : null;
+            $this->data['object']['random_id'] = !empty($data[8]) ? $data[8] : null;
             $this->data['object']['conversation_message_id'] = $data[9] ?? null;
             $this->data['object']['edit_time'] = $data[10] ?? null; // 0 (не редактировалось) или timestamp (время редактирования)
         }
@@ -262,7 +258,7 @@ class LongPoll extends SimpleVK {
     private function initFlags($data) {
         $data = is_array($data) ? $data[0] : $data;
         $flags = str_split(strrev(decbin($data)));
-        array_walk($flags, function ($key, $sym) {
+        array_walk($flags, static function ($key, $sym) {
             return $sym * 2 ^ $key;
         });
         $this->event_flags = $flags;
