@@ -5,133 +5,422 @@ namespace DigitalStars\SimpleVK;
 require_once 'config_simplevk.php';
 
 class Diagnostics {
+    private static string $final_text = '';
 
-    private static $canCreateFile = 0;
-    private static $canWriteToFile = 0;
-    private static $final_text = '';
+    public static function run() {
+        self::initialize();
+        self::webServerOrCli();
+        self::addSystemInfo();
+        self::checkCurl();
+        self::testPingVK();
+        self::checkFilePermissions();
+        self::checkModules();
+        self::finish();
+    }
 
-    static public function run() {
-        $EOL = self::EOL();
+    private static function initialize() {
+        if (PHP_SAPI !== 'cli') {
+            if(isset($_GET['type'])) {
+                switch ($_GET['type']) {
+                    case 'check_send_ok':
+                        exit(self::sendOK());
+                    case 'check_headers':
+                        exit(self::checkHeaders());
+                }
+            }
 
-        if (PHP_SAPI != 'cli') {
-            if (isset($_GET['type']) && $_GET['type'] == 'check_send_ok')
-                exit(self::sendOK());
-            if (isset($_GET['type']) && $_GET['type'] == 'check_headers')
-                exit((isset($_SERVER['HTTP_RETRY_AFTER']) && $_SERVER['HTTP_RETRY_AFTER'] == 'test_1' &&
-                    isset($_SERVER['HTTP_X_RETRY_COUNTER']) && $_SERVER['HTTP_X_RETRY_COUNTER'] == 'test_2')
-                    ? 'ok' : 'no');
-            self::$final_text .= '<html><body style="background-color: black">' .
-                '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>';
+            self::$final_text .= '<html><body style="background-color: black">'
+                . '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>';
         }
 
-        self::$final_text .= self::cyan("Диагностика системы для работы с SimpleVK " . SIMPLEVK_VERSION, $EOL, '') . $EOL;
-        self::$final_text .= self::cyan("Информация о системе", $EOL, '');
-
-        if (PHP_MAJOR_VERSION >= 8)
-            self::$final_text .= self::green("PHP: " . PHP_VERSION);
-        else
-            self::$final_text .= self::red("PHP: " . PHP_VERSION);
-
-        self::$final_text .= self::webServerOrCli();
-
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            self::$final_text .= self::yellow("ОС: " . PHP_OS . " (На Windows модули pcntl и posix недоступны, поэтому параллельный режим longpoll не будет работать)");
+        $latest_version = self::getLatestVersion();
+        if (version_compare(SIMPLEVK_VERSION, $latest_version, '<')) {
+            $new_version_str = self::formatText("(Доступна $latest_version)", 'yellow', '', need_dot: false);
         } else {
-            self::$final_text .= self::green("ОС: " . PHP_OS);
+            $new_version_str = self::formatText("(Актуальная версия)", 'green', '', need_dot: false);
         }
 
-        if (defined('PHP_OS_FAMILY')) {
-            if (PHP_OS_FAMILY == 'Windows') {
-                self::$final_text .= self::yellow("ОС_FAMILY: " . PHP_OS_FAMILY);
+        self::$final_text .= self::formatText('Диагностика системы для работы с SimpleVK ' . SIMPLEVK_VERSION . " $new_version_str", 'cyan', need_dot: false)
+            . self::formatText('Информация о системе', 'cyan', need_dot: false);
+
+    }
+
+    private static function webServerOrCli() {
+        if (PHP_SAPI == 'cli') {
+            self::$final_text .= self::formatText('Запущен через: командная строка', 'green');
+        } else if (isset($_SERVER['DOCUMENT_ROOT']) && isset($_SERVER['REQUEST_URI'])) {
+            self::$final_text .= self::formatText('Запущен через: ' . PHP_SAPI, 'green');
+        } else {
+            self::$final_text .= self::formatText("Запущен через: Веб-сервер, но DOCUMENT_ROOT и REQUEST_URI не удалось получить", 'red');
+        }
+    }
+
+    private static function addSystemInfo() {
+        self::$final_text .= self::formatText('PHP: ' . PHP_VERSION, PHP_MAJOR_VERSION >= 8 ? 'green' : 'red');
+        self::$final_text .= self::formatText('ОС: ' . self::getOSVersion(), self::isWindows() ? 'yellow' : 'green');
+        self::$final_text .= self::getCpuInfo();
+        self::$final_text .= self::getMemoryInfo();
+    }
+
+    private static function getLatestVersion() {
+        $url = 'https://api.github.com/repos/digitalstars/simplevk/releases/latest';
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36');
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+
+        $data = json_decode($response, true);
+
+        if (isset($data['tag_name'])) {
+            return ltrim($data['tag_name'], 'v');
+        }
+
+        return null;
+    }
+
+    private static function getOSVersion() {
+        if (self::isWindows()) {
+            // Получаем название ОС
+            $output = shell_exec('powershell -command "(Get-WmiObject -class Win32_OperatingSystem).Caption"');
+            $osCaption = trim($output);
+            $osCaption = explode(' ', $osCaption, 2)[1] ?? '';
+
+            // Получаем версию из реестра (например, 24H2)
+            $versionOutput = shell_exec('powershell -command "(Get-ItemProperty \"HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\").DisplayVersion"');
+            $versionCode = trim($versionOutput);
+
+            // Получаем номер сборки
+            $buildOutput = shell_exec('powershell -command "(Get-WmiObject -class Win32_OperatingSystem).Version"');
+            $buildNumber = trim($buildOutput);
+
+            if ($osCaption && $versionCode && $buildNumber) {
+                return "$osCaption ($versionCode) - build $buildNumber";
+            }
+
+            return 'Windows'; // Если не удалось получить данные, просто выводим Windows
+        } else {
+            // Для Linux
+            $output = shell_exec('lsb_release -d'); // Ubuntu, Debian и подобные
+            if (!$output) {
+                // В случае, если lsb_release не установлен
+                $output = shell_exec('grep PRETTY_NAME /etc/os-release | cut -d= -f2- | tr -d \'"\'');
+            }
+            return $output ? 'Linux (' . trim(str_replace('Description:', '', $output)) . ')' : PHP_OS; // Форматируем вывод
+        }
+    }
+
+    private static function isWindows() {
+        return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+    }
+
+    private static function formatText($text, $color, $separator = PHP_EOL, $need_dot = true) {
+        if($separator === PHP_EOL) {
+            $separator = self::EOL();
+        }
+
+        if (PHP_SAPI === 'cli') {
+            $colors = [
+                'red' => "\033[0;31m",
+                'green' => "\033[0;32m",
+                'yellow' => "\033[1;33m",
+                'cyan' => "\033[0;36m"
+            ];
+            return ($colors[$color] ?? '') . ($need_dot ? '· ' : '') . $text . $separator . "\033[0m";
+        }
+
+        return '<span style="color: ' . $color . ($need_dot ? '">· ' : '">') . $text . '</span>'. $separator;
+    }
+
+    private static function checkCurl() {
+        $curlStatus = is_callable('curl_init') ? 'доступен' : 'не доступен';
+        self::$final_text .= self::formatText("сURL: $curlStatus", $curlStatus === 'доступен' ? 'green' : 'red');
+    }
+
+    private static function testPingVK() {
+        if (!function_exists('curl_init')) return;
+
+        $min = null;
+        $max = null;
+        $pingTimes = [];
+        for ($i = 0; $i < 15; $i++) {
+            $ping = self::getPingTime();
+            if(!$min || $ping < $min) {
+                $min = $ping;
+            }
+            if(!$max || $ping > $max) {
+                $max = $ping;
+            }
+            $pingTimes[] = $ping;
+        }
+
+        $min = round($min * 1000, 1);
+        $max = round($max * 1000, 1);
+        $averagePing = round(array_sum($pingTimes) / count($pingTimes) * 1000, 1);
+        $pingMessage = "Пинг к api.vk.com: $min / $averagePing / $max мс (мин/средн/макс) (15 попыток)";
+        self::$final_text .= self::formatText($pingMessage, self::getPingStatusColor($averagePing));
+    }
+
+    private static function getPingTime() {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, 'api.vk.com');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_exec($ch);
+        $info = curl_getinfo($ch);
+        curl_close($ch);
+        return $info['total_time'];
+    }
+
+    private static function getPingStatusColor($ping) {
+        if ($ping <= 40) {
+            return 'green';
+        }
+
+        if ($ping < 100) {
+            return 'yellow';
+        }
+
+        return 'red';
+    }
+
+    private static function checkFilePermissions() {
+        self::$final_text .= self::EOL().self::formatText("Проверка работы с файлами", 'cyan', need_dot: false);
+
+        if (ini_get('open_basedir')) {
+            self::$final_text .= self::formatText('open_basedir != none. Возможны ошибки.', 'red');
+        } else {
+            self::$final_text .= self::formatText('open_basedir == none', 'green');
+        }
+
+        self::testFileOperations();
+    }
+
+    private static function testFileOperations() {
+        $testDir = __DIR__ . '/test_simplevk357475';
+        @rmdir($testDir);
+
+        if (!mkdir($testDir) && !is_dir($testDir)) {
+            self::$final_text .= self::formatText("Не удалось создать папку $testDir", 'red');
+            return;
+        }
+
+        self::$final_text .= self::formatText("Создание папок: разрешено", 'green');
+
+        $testFile = "$testDir/test.txt";
+        if (!@file_put_contents($testFile, '123')) {
+            self::$final_text .= self::formatText("Не удалось создать файл $testFile", 'red');
+            return;
+        }
+
+        self::$final_text .= self::formatText("Создание файлов: разрешено", 'green');
+
+        if (!@file_get_contents($testFile)) {
+            self::$final_text .= self::formatText("Чтение файлов: запрещено", 'red');
+        } else {
+            self::$final_text .= self::formatText("Чтение файлов: разрешено", 'green');
+        }
+
+        self::cleanupTestFiles($testFile, $testDir);
+    }
+
+    private static function cleanupTestFiles($file, $dir) {
+        if (file_exists($file)) {
+            if (!@unlink($file)) {
+                self::$final_text .= self::formatText("Удаление файлов: запрещено", 'red');
             } else {
-                self::$final_text .= self::green("ОС_FAMILY: " . PHP_OS_FAMILY);
+                self::$final_text .= self::formatText("Удаление файлов: разрешено", 'green');
             }
         }
 
-        self::$final_text .= self::num_cpus();
-        self::$final_text .= self::get_memory();
-        self::$final_text .= self::get_memory(2);
+        if (file_exists($dir)) {
+            if (!@rmdir($dir)) {
+                self::$final_text .= self::formatText("Удаление папок: запрещено", 'red');
+            } else {
+                self::$final_text .= self::formatText("Удаление папок: разрешено", 'green');
+            }
+        }
+    }
 
-        if (is_callable('curl_init')) {
-            self::$final_text .= self::green("CURL: доступен");
+    private static function checkModules() {
+        self::$final_text .= self::EOL().self::formatText("Проверка активации обязательных модулей в php.ini", 'cyan', need_dot: false);
+        self::checkModuleGroup(['curl', 'json', 'mbstring']);
+        self::$final_text .= self::EOL().self::formatText("Проверка активации опциональных модулей в php.ini", 'cyan',  need_dot: false);
+        self::checkModuleGroup(['pcntl', 'posix', 'mysqli', 'pdo_mysql', 'sqlite3', 'pdo_sqlite', 'pgsql', 'pdo_pgsql']);
+    }
+
+    private static function checkModuleGroup($modules) {
+        $modules_str = '';
+        foreach ($modules as $module) {
+            $status = self::checkModule($module);
+            $modules_str .= self::formatText($module, $status, ', ', false);
+        }
+        self::$final_text .= $modules_str.self::EOL();
+    }
+
+    private static function checkModule($moduleName) {
+        return extension_loaded($moduleName) ? 'green' : 'red';
+    }
+
+    private static function getMemoryInfo() {
+        if (self::isWindows()) {
+            // Команда для получения информации о RAM через PowerShell
+            $command = 'powershell -command "Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize, FreePhysicalMemory"';
+
+            $output = shell_exec($command);
+            if (empty($output)) {
+                return self::formatText('Не удалось получить информацию о памяти', 'yellow');
+            }
+
+            $lines = explode("\n", trim($output));
+            if (count($lines) < 3) {
+                return self::formatText('Не удалось получить информацию о памяти', 'yellow');
+            }
+
+            $memoryData = preg_split('/\s+/', trim($lines[2]));
+            if (count($memoryData) < 2) {
+                return self::formatText('Не удалось получить информацию о памяти', 'yellow');
+            }
+
+            // Преобразуем значения из килобайт в гигабайты
+            $totalMemoryGB = round($memoryData[0] / 1024 / 1024, 2);
+            $freeMemoryGB = round($memoryData[1] / 1024 / 1024, 2);
+
+            // Вычисляем занятую память и процент использования
+            $usedMemoryGB = round($totalMemoryGB - $freeMemoryGB, 2);
+            $usedPercentage = round(($usedMemoryGB / $totalMemoryGB) * 100, 2);
+
+            return self::formatText("ОЗУ занято: $usedMemoryGB / $totalMemoryGB GB ($usedPercentage%)", 'green');
         } else {
-            self::$final_text .= self::red("CURL: не доступен");
-        }
-        if (PHP_SAPI != 'cli') {
-            self::$final_text .= '<span id="test_server" style="color: white">· Веб-сервер: Выполняется фоновая проверка...</span><br>';
-        }
-        self::$final_text .= self::testPingVK();
+            $free = shell_exec('free -m'); // Получаем данные сразу в мегабайтах
+            $free = trim($free);
+            $free_arr = explode("\n", $free);
+            $mem = preg_split('/\s+/', $free_arr[1]); // Разделяем строку по пробелам
 
-        self::$final_text .= $EOL . self::cyan("Проверка работы с файлами", $EOL, '');
+            $memtotal = round($mem[1] / 1000, 2); // Переводим в гигабайты
+            $memused = round($mem[2] / 1000, 2);
 
-        if(ini_get('open_basedir')) {
-            self::$final_text .= self::red("open_basedir != none. Из-за этого могут быть ошибки.");
+            if ($memtotal) {
+                return self::formatText("ОЗУ занято: " . $memused . " / $memtotal GB (" . round($memused / $memtotal * 100) . "%)", 'green');
+            }
+
+            return self::formatText("Не удалось получить информацию об ОЗУ", 'yellow');
+        }
+    }
+
+    private static function getCpuInfo() {
+        // Определяем операционную систему
+        $os = PHP_OS_FAMILY;
+        // Инициализируем переменные для хранения данных
+        $cpuName = '';
+        $cpuCores = 0;
+        $cpuLoad = 0;
+        $return_text = '';
+
+        if (self::isWindows()) {
+            // Команда для получения информации о процессоре в Windows
+            $cpuInfoCommand = 'powershell -command "Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, LoadPercentage"';
+            $output = shell_exec($cpuInfoCommand);
+
+            if (!empty($output)) {
+                $lines = explode("\n", trim($output));
+                if (count($lines) > 2) {
+                    $data = preg_split('/\s{2,}/', trim($lines[2]));
+                    $cpuName = $data[0];
+                    $cpuCores = $data[1];
+                    $cpuLoad = $data[2] ?? 'N/A';
+                }
+                $return_text .= self::formatText("Процессор: $cpuName", 'green');
+                $return_text .= self::formatText("Количество ядер: $cpuCores", 'green');
+                $return_text .= self::formatText("Загруженность процессора: $cpuLoad%", 'green');
+            } else {
+                $return_text .= self::formatText("Не удалось получить информацию о процессоре", 'yellow');
+            }
+        } elseif ($os === 'Linux') {
+            // Получаем имя процессора из /proc/cpuinfo
+            $cpuName = shell_exec("grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f2");
+            $cpuName = trim($cpuName);
+
+            // Получаем количество ядер
+            $cpuCores = (int) shell_exec("nproc");
+
+            // Получаем среднюю загрузку за последние 5 минут из /proc/loadavg
+            $loadAvg = file_get_contents('/proc/loadavg');
+            $loadAvgValues = explode(' ', $loadAvg);
+            $cpuLoad = round((float)$loadAvgValues[1], 2); // Вторая колонка - это средняя загрузка за 5 минут
+            if($cpuName) {
+                $return_text .= self::formatText("Процессор: $cpuName", 'green');
+            } else {
+                $return_text .= self::formatText("Не удалось получить информацию о названии процессора", 'yellow');
+            }
+            if($cpuCores) {
+                $return_text .= self::formatText("Количество ядер: $cpuCores", 'green');
+            } else {
+                $return_text .= self::formatText("Не удалось получить информацию о количестве ядер", 'yellow');
+            }
+            if($cpuLoad) {
+                $return_text .= self::formatText("Средняя нагрузка за 5 минут: $cpuLoad%", 'green');
+            } else {
+                $return_text .= self::formatText("Не удалось получить информацию загруженности процессора", 'yellow');
+            }
         } else {
-            self::$final_text .= self::green("open_basedir == none");
+            $return_text .= self::formatText("Не удалось получить информацию о процессоре", 'yellow');
         }
 
-        self::checkFileJob();
+        return $return_text;
+    }
 
+    private static function finish() {
+        if (PHP_SAPI !== 'cli') {
+            self::$final_text .= self::EOL().self::formatText("Проверка работы веб-сервера", 'cyan', need_dot: false);
+            self::$final_text .= self::addNetworkChecks();
+            self::$final_text .= self::EOL() . self::formatText("Не забудьте удалить этот скрипт после проверки!", 'yellow', need_dot: false);
+        }
 
-        self::$final_text .= $EOL . self::cyan("Проверка активации Обязательных модулей в php.ini", $EOL, '');
-        self::checkImportantModules();
+        echo self::$final_text.self::EOL();
+    }
 
-        self::$final_text .= $EOL;
-
-        self::$final_text .= $EOL . self::cyan("Проверка активации Опциональных модулей в php.ini", $EOL, '');
-        self::checkNoImportantModules();
-
-        self::$final_text .= $EOL;
-
-        if (PHP_SAPI != 'cli') {
-            self::$final_text .= $EOL . self::cyan("Проверка работы с сетью", $EOL, '') .
-                '<span id="test_send_ok" style="color: white">· Выполняется фоновая проверка...</span><br>' .
-                '<span id="test_check_header" style="color: white">· Выполняется фоновая проверка...</span><br>' .
-                $EOL . self::yellow("Не забудьте удалить скрипт, чтобы другие не смогли узнать информацию о вашем сервере", $EOL, '') .
-                '<script type="text/javascript">
+    private static function addNetworkChecks() {
+        return <<<HTML
+<span id="test_send_ok" style="color: white">· Выполняется фоновая проверка...</span><br>
+<span id="test_check_header" style="color: white">· Выполняется фоновая проверка...</span><br>
+<span id="test_server" style="color: white">· Выполняется фоновая проверка...</span><br>
+<script type="text/javascript">
+    $.ajax({ url: window.location.href, data: "type=check_send_ok", success: function(response, status, xhr) {
+        let test_send_ok = $("#test_send_ok"),  test_server = $("#test_server"), server = xhr.getResponseHeader("server");
+        test_send_ok.text(response === "ok" ? "· PHP может разрывать соединение с ВК" : "· PHP не может разрывать соединение с ВК (sendOK() не работает)");
+        test_send_ok.css("color", response === "ok" ? "green" : "red");
+        
+        test_server.text(test_server ? "· Веб-сервер: " + server : "· Веб-сервер: Нет данных");
+        test_server.css("color", test_server ? "green" : "red");
+    }});
     $.ajax({
-      url: window.location.href,
-      data: "type=check_send_ok",
-      success: function (response, status, xhr) {
-        let test_send_ok = $("#test_send_ok"), 
-            test_server = $("#test_server")
-            server = xhr.getResponseHeader("server");
-        if (response == "ok") {
-          test_send_ok.text("· PHP может разрывать соединение с ВК");
-          test_send_ok.css("color", "green");
-        } else {
-          test_send_ok.text("· PHP не может разрывать соединение с ВК. sendOK() не работает");
-          test_send_ok.css("color", "red");
+        url: window.location.href,
+        data: "type=check_headers",
+        headers: {"Retry-After": "test_1", "X-Retry-Counter": "test_2"},
+        success: function(response) {
+            let test_headers = $("#test_check_header");
+            test_headers.text(response === "ok" ? "· PHP получает кастомные заголовки" : "· PHP не получает кастомные заголовки");
+            test_headers.css("color", response === "ok" ? "green" : "red");
         }
-        if (server) {
-          test_server.text("· Веб-сервер: " + server);
-          test_server.css("color", "green");
-        } else {
-          test_server.text("· Веб-сервер: Нет данных");
-          test_server.css("color", "red");
-        }
-      }
-    });
-  $.ajax({
-      url: window.location.href,
-      data: "type=check_headers",
-      headers: {"Retry-After": "test_1", "X-Retry-Counter": "test_2"},
-      success: function (response) {
-        let test_headers = $("#test_check_header");
-        if (response == "ok") {
-          test_headers.text("· PHP получает кастомные заголовки");
-          test_headers.css("color", "green");
-        } else {
-          test_headers.text("· PHP не получает кастомные заголовки на этом веб-сервере");
-          test_headers.css("color", "red");
-        }
-      }
-    });
+  });
 </script>
-</body></html>';
+</body></html>
+HTML;
+    }
+
+    private static function EOL() {
+        if (PHP_SAPI != 'cli') {
+            return '<br>';
         }
 
-        print self::$final_text;
+        return PHP_EOL;
     }
 
     private static function sendOK() {
@@ -150,7 +439,6 @@ class Diagnostics {
         // для Apache
         ignore_user_abort(true);
 
-        PHP_EOL;
         ob_start();
         header('Content-Encoding: none');
         header('Content-Length: 2');
@@ -161,251 +449,10 @@ class Diagnostics {
         return True;
     }
 
-    private static function EOL() {
-        if (PHP_SAPI != 'cli') {
-            return '<br>';
-        } else {
-            return PHP_EOL;
-        }
-    }
+    private static function checkHeaders() {
+        $hasRetryAfter = isset($_SERVER['HTTP_RETRY_AFTER']) && $_SERVER['HTTP_RETRY_AFTER'] == 'test_1';
+        $hasRetryCounter = isset($_SERVER['HTTP_X_RETRY_COUNTER']) && $_SERVER['HTTP_X_RETRY_COUNTER'] == 'test_2';
 
-    private static function checkFileJob() {
-        @rmdir('test_simplevk357475');
-        $result = @mkdir('test_simplevk357475');
-        if ($result === false) {
-            self::$final_text .= self::red("Не удалось создать папку test_simplevk357475");
-        } else {
-            self::$final_text .= self::green("Создание папок: разрешено");
-            $result = @file_put_contents('test_simplevk357475/test.txt', '123');
-            if ($result === false) {
-                self::$final_text .= self::red("Не удалось создать файл ./test_simplevk357475/test.txt");
-            } else {
-                self::$final_text .= self::green("Создание файлов: разрешено");
-                self::$canCreateFile = 1;
-                $result = @file_get_contents('test_simplevk357475/test.txt');
-                if ($result === false) {
-                    self::$final_text .= self::red("Чтение файлов: запрещено");
-                } else {
-                    self::$final_text .= self::green("Чтение файлов: разрешено");
-                    if ($result == 123) {
-                        self::$final_text .= self::green("Запись в файлы: разрешено");
-                        self::$canWriteToFile = 1;
-                    } else {
-                        self::$final_text .= self::red("Запись в файлы: запрещено");
-                    }
-                }
-            }
-        }
-        self::deleteTest();
-    }
-
-    private static function deleteTest() {
-        if (file_exists('test_simplevk357475/test.txt')) {
-            $result = @unlink('test_simplevk357475/test.txt');
-            if ($result === false)
-                self::$final_text .= self::red("Удаление файлов: запрещено");
-            else
-                self::$final_text .= self::green("Удаление файлов: разрешено");
-        }
-
-        if (file_exists('test_simplevk357475')) {
-            $result = @rmdir('test_simplevk357475');
-            if ($result === false)
-                self::$final_text .= self::red("Удаление папок: запрещено");
-            else
-                self::$final_text .= self::green("Удаление папок: разрешено");
-        }
-    }
-
-    private static function red($string, $add = PHP_EOL, $add_first = '· '): string {
-        if (PHP_SAPI == 'cli')
-            return "\033[" . "0;31m" . $add_first . $string . $add . "\033[0m";
-        else {
-            if ($add == PHP_EOL)
-                $add = '<br>';
-            return '<span style="color: red">' . $add_first . $string . $add . '</span>';
-        }
-    }
-
-    private static function green($string, $add = PHP_EOL, $add_first = '· '): string {
-        if (PHP_SAPI == 'cli')
-            return "\033[" . "0;32m" . $add_first . $string . $add . "\033[0m";
-        else {
-            if ($add == PHP_EOL)
-                $add = '<br>';
-            return '<span style="color: green">' . $add_first . $string . $add . '</span>';
-        }
-    }
-
-    private static function cyan($string, $add = PHP_EOL, $add_first = '· '): string {
-        if (PHP_SAPI == 'cli')
-            return "\033[" . "0;36m" . $add_first . $string . $add . "\033[0m";
-        else {
-            if ($add == PHP_EOL)
-                $add = '<br>';
-            return '<span style="color: cyan">' . $add_first . $string . $add . '</span>';
-        }
-    }
-
-    private static function yellow($string, $add = PHP_EOL, $add_first = '· '): string {
-        if (PHP_SAPI == 'cli')
-            return "\033[" . "1;33m" . $add_first . $string . $add . "\033[0m";
-        else {
-            if ($add == PHP_EOL)
-                $add = '<br>';
-            return '<span style="color: yellow">' . $add_first . $string . $add . '</span>';
-        }
-    }
-
-    private static function webServerOrCli() {
-        if (PHP_SAPI == 'cli') {
-            $text = self::green('Запущен через: ' . PHP_SAPI);
-        } else if (isset($_SERVER['DOCUMENT_ROOT']) && isset($_SERVER['REQUEST_URI'])) {
-            $text = self::green('Запущен через: ' . PHP_SAPI);
-        } else {
-            $text = self::red("Запущен через: Веб-сервер, но DOCUMENT_ROOT и REQUEST_URI не удалось получить");
-        }
-        return $text;
-    }
-
-    private static function checkImportantModules() {
-        self::module('curl');
-        self::module('json');
-        self::module('mbstring');
-        self::module('fileinfo');
-        if (PHP_SAPI == 'cli') {
-            self::module('pcntl');
-            self::module('posix');
-        }
-    }
-
-    private static function checkNoImportantModules() {
-        self::module('mysqli');
-        self::module('pdo_mysql');
-        self::module('sqlite3');
-        self::module('pdo_sqlite');
-        self::module('pgsql');
-        self::module('pdo_pgsql');
-    }
-
-    private static function module($name) {
-        if (extension_loaded($name)) {
-            self::$final_text .= self::green($name, ', ', '');
-        } else {
-            self::$final_text .= self::red($name, ', ', '');
-        }
-    }
-
-    private static function testPingVK() {
-        if (function_exists('curl_init')) {
-            $arr = [];
-            $ch = curl_init();
-            for ($i = 0; $i < 15; $i++) {
-                curl_setopt($ch, CURLOPT_URL, 'api.vk.com');
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-                $check = curl_exec($ch);
-                if($check === false) {
-                    return self::red("Не удалось выполнить сетевой запрос через curl, возможно проблемы с сетью");
-                }
-                $info = curl_getinfo($ch);
-                if($i>5)
-                    $arr[] = $info['total_time'];
-            }
-            curl_close($ch);
-            $ms = round(array_sum($arr)/count($arr)*1000, 1);
-            if($ms <= 40)
-                return self::green("Пинг до api.vk.com: {$ms}мс");
-            else if($ms > 40 && $ms < 100)
-                return self::yellow("Пинг до api.vk.com: {$ms}мс");
-            else
-                return self::red("Пинг до api.vk.com: {$ms}мс");
-        }
-    }
-
-    private static function get_memory($type = 1) {
-        if ('WIN' == strtoupper(substr(PHP_OS, 0, 3)) && $type === 1) {
-            @exec("wmic OS get TotalVisibleMemorySize" . " 2>&1", $s);
-            $ram_max = isset($s[1]) ? round(((int)$s[1])/1024/1024, 2) : 0;
-
-            @exec('wmic OS get FreePhysicalMemory /Value 2>&1', $output, $return);
-            $ram_free = substr($output[2],19);
-            $ram_free = round($ram_free/1024/1024,2);
-
-            if($ram_max && $ram_free)
-                return self::green("ОЗУ занято: $ram_free / $ram_max GB");
-            else
-                return self::yellow("Не удалось получить информацию об ОЗУ");
-        } else {
-            $meminfo_text = @file_get_contents("/proc/meminfo");
-            if($meminfo_text !== false) {
-                $data = explode("\n", $meminfo_text);
-                $meminfo = [];
-                foreach ($data as $line) {
-                    $ex = @explode(":", $line);
-                    $key = $ex[0] ?? '';
-                    $val = $ex[1] ?? '';
-                    $val = explode(' ',trim($val))[0] ?? null;
-                    if($val)
-                        $meminfo[$key] = $val;
-                }
-            }
-            $ram_max = $meminfo['MemTotal'] ?? null;
-            $ram_buffers = $meminfo['Buffers'] ?? null;
-            $ram_cached = $meminfo['Cached'] ?? null;
-            $ram_active = $meminfo['Active'] ?? null;
-
-            if($ram_max && $ram_buffers && $ram_cached && $ram_active) {
-                $ram_free = round(($ram_buffers+$ram_active)/1024/1024,2);
-                $ram_free2 = round(($ram_buffers+$ram_active+$ram_cached)/1024/1024,2);
-                $ram_max = round($ram_max/1024/1024,2);
-                if($type === 1)
-                    return self::green("ОЗУ занято: $ram_free / $ram_max GB (".(round($ram_free / $ram_max * 100))."%) (без учета cached)");
-                else
-                    return self::green("ОЗУ занято: $ram_free2 / $ram_max GB (".(round($ram_free2 / $ram_max * 100))."%) (с учетом cached)");
-            } else
-                return self::yellow("Не удалось получить информацию об ОЗУ");
-        }
-    }
-
-    private static function num_cpus() {
-        $numCpus = 0;
-
-        if ('WIN' == strtoupper(substr(PHP_OS, 0, 3))) {
-            $process = @popen('wmic cpu get NumberOfCores', 'rb');
-
-            if (false !== $process) {
-                @fgets($process);
-                $numCpus = intval(@fgets($process));
-
-                @pclose($process);
-            }
-        } else {
-            if (@is_file('/proc/cpuinfo')) {
-                $cpuinfo = @file_get_contents('/proc/cpuinfo');
-                preg_match_all('/^processor/m', $cpuinfo, $matches);
-
-                $numCpus = count($matches[0]);
-            } else {
-                $process = @popen('sysctl -a', 'rb');
-
-                if (false !== $process) {
-                    $output = @stream_get_contents($process);
-
-                    preg_match('/hw.ncpu: (\d+)/', $output, $matches);
-                    if ($matches) {
-                        $numCpus = intval($matches[1][0]);
-                    }
-
-                    @pclose($process);
-                }
-            }
-        }
-
-        if($numCpus != 0)
-            return self::green("Количество ядер процессора: ".$numCpus);
-        else
-            return self::yellow("Не удалось получить количество ядер процессора");
+        return ($hasRetryAfter && $hasRetryCounter) ? 'ok' : 'no';
     }
 }
