@@ -9,8 +9,7 @@
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-pcntl": "*",
-        "ext-posix": "*",
-        "ext-fileinfo": "*"
+        "ext-posix": "*"
     },
     "autoload": {
         "files": [
