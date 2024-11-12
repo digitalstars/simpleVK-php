@@ -143,12 +143,12 @@ class LongPoll extends SimpleVK {
 
         if (!isset($result)) {
             if ($iteration <= 5) {
-                SimpleVkException::nullError('Запрос к вк вернул пустоту. Повторная отправка, попытка №' . $iteration);
+                SimpleVkException::logCustomError('Запрос к вк вернул пустоту. Повторная отправка, попытка №' . $iteration);
                 $result = $this->request_core_lp($url, $params, ++$iteration); //TODO рекурсия
             } else {
                 $error_message = "Запрос к вк вернул пустоту. Завершение 5 попыток отправки\n
                                   Метод:$url\nПараметры:\n" . json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                SimpleVkException::nullError($error_message);
+                SimpleVkException::logCustomError($error_message);
                 throw new \Exception($error_message, 77777);
             }
         }
