@@ -89,7 +89,8 @@ trait ErrorHandler {
             if (!$need_skip_check_error_without_trace && in_array($type, $error_type_without_trace, true)) {
                  //Создаем исключение для типа ошибки, не содержащей полного трейса
                 $exception = new SimpleVkException(0, $message);
-                $this->exceptionHandler($exception, $type, true); // Передаем оригинальный тип ошибки и получаем полный трейс
+                // Передаем оригинальный тип ошибки и получаем полный трейс
+                $this->exceptionHandler($exception, $type, true);
                 return;
             }
 
@@ -181,7 +182,7 @@ trait ErrorHandler {
         }
 
         if (!isset($files_cache[$file])) {
-            return 'Файл недоступен.';
+            return false;
         }
 
         $lines = $files_cache[$file];
@@ -235,22 +236,22 @@ trait ErrorHandler {
         $file = $trace['file'] ?? 'unknown file';
         $line = $trace['line'] ?? '?';
 
-        $formatted_file = $this->filterPaths($file);
-
         $code_snippet = $this->getCodeSnippet($file, (int)$line);
-        $pattern = '#/(simplevk3/src|vendor|simplevk-master/src|simplevk-testing/src)(/.*)#';
-        $user_file_marker = '➡ ';
+        $pattern = '#/(vendor|simplevk[^/]*/src)(/.*)#';
 
-        if (preg_match($pattern, $formatted_file, $matches) || !isset($trace['file'])) {
+        $formatted_file = $this->filterPaths($file);
+        if (isset($trace['file']) && preg_match($pattern, $formatted_file, $matches)) {
             $formatted_file = ".." . $matches[0];
             $user_file_marker = '';
-            if(!$this->short_trace) {
-                $trace_line .= $this->coloredLog("{$user_file_marker}#{$num} ", 'GREEN')
-                    . $this->coloredLog($formatted_file, 'BLUE')
-                    . $this->coloredLog("($line)", 'YELLOW') . "\n"
-                    . $this->coloredLog($code_snippet, 'WHITE') . "\n\n";
-            }
+        } elseif (!isset($trace['file']) || !$code_snippet) {
+            $formatted_file = 'Файл недоступен.';
+            $user_file_marker = '';
         } else {
+            $user_file_marker = '➡ ';
+        }
+
+        // Если короткий трейс выключен или это не файл библиотеки
+        if (!$this->short_trace || !empty($user_file_marker)) {
             $trace_line .= $this->coloredLog("{$user_file_marker}#{$num} ", 'GREEN')
                 . $this->coloredLog($formatted_file, 'BLUE')
                 . $this->coloredLog("($line)", 'YELLOW') . "\n"
