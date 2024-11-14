@@ -3,6 +3,7 @@
 namespace DigitalStars\SimpleVK;
 
 use Exception;
+use DigitalStars\SimpleVK\Internal\UniqueEventHandler;
 
 require_once('config_simplevk.php');
 
@@ -28,7 +29,8 @@ class SimpleVK {
     public function __construct($token, $version, $also_version = null) {
 
         if (!self::$retry_requests_processing &&
-            ((function_exists('getallheaders') && isset(getallheaders()['X-Retry-Counter'])) || isset($_SERVER['HTTP_X_RETRY_COUNTER']))) {
+            ((function_exists('getallheaders') && isset(getallheaders()['X-Retry-Counter'])) ||
+                isset($_SERVER['HTTP_X_RETRY_COUNTER']))) {
             exit('ok');
         }
 
@@ -39,6 +41,7 @@ class SimpleVK {
         $this->processAuth($token, $version, $also_version);
         $this->data = json_decode(file_get_contents('php://input'), 1);
         $this->data_backup = $this->data;
+
         if (isset($this->data['type']) && $this->data['type'] != 'confirmation') {
             if (self::$debug_mode) {
                 $this->debugRun();
@@ -46,6 +49,14 @@ class SimpleVK {
                 $this->sendOK();
                 self::$debug_mode = true;
             }
+
+            if(isset($this->data['event_id'])) {
+                $is_dublicated = UniqueEventHandler::addEventToCache($this->data['event_id']);
+                if($is_dublicated) {
+                    exit();
+                }
+            }
+
             if (isset($this->data['object']['message']) && $this->data['type'] == 'message_new') {
                 $this->data['object'] = $this->data['object']['message'];
             }
@@ -316,7 +327,7 @@ class SimpleVK {
         $message->uploadAllImages();
         $count = 0;
         print "Начинаю рассылку\n";
-        for ($i = 1; ; $i = $i + 100) {
+        for ($i = 1; ; $i += 100) {
             $return = $message->send(range(2e9 + $i, 2e9 + $i + 99));
             $current_count = count(array_column($return, 'message_id'));
             $count += $current_count;
@@ -337,7 +348,7 @@ class SimpleVK {
             'event_data' => json_encode([
                 'type' => 'show_snackbar',
                 'text' => $text
-            ])
+            ], JSON_THROW_ON_ERROR)
         ]);
     }
 
@@ -350,7 +361,7 @@ class SimpleVK {
             'event_data' => json_encode([
                 'type' => 'open_link',
                 'link' => $link
-            ])
+            ], JSON_THROW_ON_ERROR)
         ]);
     }
 
@@ -365,7 +376,7 @@ class SimpleVK {
                 'app_id' => $app_id,
                 'owner_id' => $owner_id,
                 'hash' => $hash
-            ])
+            ], JSON_THROW_ON_ERROR)
         ]);
     }
 
@@ -482,6 +493,61 @@ class SimpleVK {
         } catch (Exception $e) {
             return false;
         }
+    }
+
+    /**
+     * Ограничить отправку сообщений пользователю/ям в беседе
+     * @param int $seconds количество секунд мута или 0 для бесконечного
+     * @param array|int $user_ids По умолчанию user_id из события
+     * @param int|null $peer_id По умолчанию peer_id из события
+     * @return array|null
+     */
+    public function setMute(int $seconds = 0, array|int $user_ids = [], int $peer_id = null): ?array {
+        $this->initPeerID($from_peer_id)->initUserID($from_user_id);
+
+        if($seconds < 0) {
+            trigger_error(
+                "Количество секунд мута должно быть больше или равно 0.",
+                E_USER_WARNING
+            );
+
+            return null;
+        }
+
+        if(!$from_peer_id && !$from_user_id && !$peer_id && !$user_ids) {
+            trigger_error("Попытка вызова setMute без параметров, при отсутствии в событии от ВК peer_id и user_id.", E_USER_WARNING);
+            return null;
+        }
+
+        $for = ($seconds == 0) ? [] : ['for' => $seconds];
+        $user_ids = is_array($user_ids) ? $user_ids : [$user_ids];
+        $member_ids = empty($user_ids) ? ['member_ids' => $from_user_id] : ['member_ids' => implode(',', $user_ids)];
+        $peer_id_param = $peer_id ? ['peer_id' => $peer_id] : ['peer_id' => $from_peer_id];
+
+        return $this->request('messages.changeConversationMemberRestrictions',
+            ['action' => 'ro'] + $peer_id_param + $for + $member_ids);
+    }
+
+    /**
+     * Снять ограничия отправки сообщений пользователю/ям в беседе
+     * @param array|int $user_ids По умолчанию user_id из события
+     * @param int|null $peer_id По умолчанию peer_id из события
+     * @return array|null
+     */
+    public function unsetMute(array|int $user_ids = [], int $peer_id = null): ?array {
+        $this->initPeerID($from_peer_id)->initUserID($from_user_id);
+
+        if(!$from_peer_id && !$from_user_id && !$peer_id && !$user_ids) {
+            trigger_error("Попытка вызова unsetMute без параметров, при отсутствии в событии от ВК peer_id и user_id.", E_USER_WARNING);
+            return null;
+        }
+
+        $user_ids = is_array($user_ids) ? $user_ids : [$user_ids];
+        $member_ids = empty($user_ids) ?  ['member_ids' => $from_user_id] : ['member_ids' => implode(',', $user_ids)];
+        $peer_id_param = $peer_id ? ['peer_id' => $peer_id] : ['peer_id' => $from_peer_id];
+
+        return $this->request('messages.changeConversationMemberRestrictions',
+            ['action' => 'rw'] + $peer_id_param + $member_ids);
     }
 
     public function getAllDialogs($extended = 0, $filter = 'all', $fields = null) {
@@ -608,6 +674,8 @@ class SimpleVK {
             $params['group_id'] = $this->group_id; //а надо ли
         }
         $url = $this->api_url . $method;
+
+        $result = null;
 
         if(!empty($messages)) {
             foreach ($messages as $message) {
