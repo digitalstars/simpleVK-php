@@ -148,8 +148,16 @@ class Diagnostics {
         $min = null;
         $max = null;
         $pingTimes = [];
-        for ($i = 0; $i < 15; $i++) {
+        $big_ping = false;
+
+        for ($i = 0; $i < 10; $i++) {
             $ping = self::getPingTime();
+
+            if(!$ping) {
+                $big_ping = true;
+                break;
+            }
+
             if(!$min || $ping < $min) {
                 $min = $ping;
             }
@@ -159,10 +167,16 @@ class Diagnostics {
             $pingTimes[] = $ping;
         }
 
+        if($big_ping) {
+            $pingMessage = "Пинг к api.vk.com: >300ms";
+            self::$final_text .= self::formatText($pingMessage, 'red');
+            return;
+        }
+
         $min = round($min * 1000, 1);
         $max = round($max * 1000, 1);
         $averagePing = round(array_sum($pingTimes) / count($pingTimes) * 1000, 1);
-        $pingMessage = "Пинг к api.vk.com: $min / $averagePing / $max мс (мин/средн/макс) (15 попыток)";
+        $pingMessage = "Пинг к api.vk.com: $min / $averagePing / $max мс (мин/средн/макс) (10 попыток)";
         self::$final_text .= self::formatText($pingMessage, self::getPingStatusColor($averagePing));
     }
 
@@ -172,9 +186,15 @@ class Diagnostics {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_exec($ch);
+        curl_setopt($ch, CURLOPT_TIMEOUT_MS, 300); //тайм-аут в 300 мс
+        $result = curl_exec($ch);
         $info = curl_getinfo($ch);
         curl_close($ch);
+
+        if(!$result) {
+            return false;
+        }
+
         return $info['total_time'];
     }
 
@@ -251,17 +271,29 @@ class Diagnostics {
     private static function checkModules() {
         self::$final_text .= self::EOL().self::formatText("Проверка активации обязательных модулей в php.ini", 'cyan', need_dot: false);
         self::checkModuleGroup(['curl', 'json', 'mbstring']);
-        self::$final_text .= self::EOL().self::formatText("Проверка активации опциональных модулей в php.ini", 'cyan',  need_dot: false);
-        self::checkModuleGroup(['pcntl', 'posix', 'mysqli', 'pdo_mysql', 'sqlite3', 'pdo_sqlite', 'pgsql', 'pdo_pgsql']);
+        self::$final_text .= self::EOL().self::formatText("Проверка активации рекомендуемых модулей в php.ini", 'cyan',  need_dot: false);
+
+        self::checkModuleGroup(['redis'], add_eol: false);
+        self::$final_text .= self::formatText(' (Используется для обнаружения дублирующихся событий от VK API и их игнорирования)', 'yellow', '', false) . self::EOL();
+        self::checkModuleGroup(['pcntl', 'posix'], add_eol: false);
+        self::$final_text .= self::formatText(' (Автоматическая многопоточная обработка событий через Longpoll)', 'yellow', '', false) . self::EOL();
+
+        self::$final_text .= self::EOL().self::formatText("Проверка активации других модулей в php.ini", 'cyan',  need_dot: false);
+        self::checkModuleGroup(['mysqli', 'pdo_mysql', 'sqlite3', 'pdo_sqlite', 'pgsql', 'pdo_pgsql']);
     }
 
-    private static function checkModuleGroup($modules) {
+    private static function checkModuleGroup($modules, $add_eol = true) {
         $modules_str = '';
-        foreach ($modules as $module) {
+        $count = count($modules);
+        foreach ($modules as $key => $module) {
             $status = self::checkModule($module);
-            $modules_str .= self::formatText($module, $status, ', ', false);
+            if($key+1 == $count) {
+                $modules_str .= self::formatText($module, $status, '', false);
+            } else {
+                $modules_str .= self::formatText($module, $status, ', ', false);
+            }
         }
-        self::$final_text .= $modules_str.self::EOL();
+        self::$final_text .= $modules_str . ($add_eol ? self::EOL() : '');
     }
 
     private static function checkModule($moduleName) {
