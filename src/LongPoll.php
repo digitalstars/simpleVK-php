@@ -2,6 +2,8 @@
 
 namespace DigitalStars\SimpleVK;
 
+use DigitalStars\SimpleVK\Internal\UniqueEventHandler;
+
 class LongPoll extends SimpleVK {
     use ErrorHandler;
 
@@ -48,12 +50,20 @@ class LongPoll extends SimpleVK {
      * Проверить наличие модуля многопоточности и если есть включить потоки
      */
     private function multiThread() {
-        extension_loaded('posix') and extension_loaded('pcntl') ? $this->is_multi_thread = true : $this->is_multi_thread = false;
+        $this->is_multi_thread = (extension_loaded('posix') && extension_loaded('pcntl'));
     }
 
     public function listen($anon) {
         while ($data = $this->processingData()) {
             foreach ($data['updates'] as $event) {
+
+                if(isset($event['event_id'])) {
+                    $is_dublicated = UniqueEventHandler::addEventToCache($event['event_id']);
+                    if($is_dublicated) {
+                        continue;
+                    }
+                }
+
                 if ($this->is_multi_thread) {
                     while (pcntl_wait($status, WNOHANG | WUNTRACED) > 0) {
                     }
