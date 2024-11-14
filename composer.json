@@ -7,9 +7,12 @@
         "php": ">=8.0",
         "ext-curl": "*",
         "ext-json": "*",
-        "ext-mbstring": "*",
-        "ext-pcntl": "*",
-        "ext-posix": "*"
+        "ext-mbstring": "*"
+    },
+    "suggest": {
+        "ext-redis": "Используется для обнаружения дублирующихся событий от VK API и их игнорирования",
+        "ext-pcntl": "Автоматическая многопоточная обработка событий через Longpoll",
+        "ext-posix": "Автоматическая многопоточная обработка событий через Longpoll"
     },
     "autoload": {
         "files": [
