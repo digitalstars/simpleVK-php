@@ -215,12 +215,27 @@ trait ErrorHandler {
         );
     }
 
-    private function buildNewTrace(array $traceData, string $file, int $line, bool $need_skip_check_error_without_trace): string {
-        //если нет трейса, значит мы получили его искуственно и первый элемент трейса не нужен
-        $trace = $need_skip_check_error_without_trace ? '' : $this->formatTraceLine(['file' => $file, 'line' => $line], 0);
+    private function buildNewTrace(array $trace_data, string $file, int $line, bool $need_skip_check_error_without_trace): string {
+        $trace_index_start = 1;
 
-        foreach ($traceData as $num => $data) {
-            $trace .= $this->formatTraceLine($data, $num + 1);
+        if($need_skip_check_error_without_trace) {
+            $trace = '';
+            $first_trace = $trace_data[0] ?? null;
+            if($first_trace
+                    && !isset($first_trace['file'])
+                    && $first_trace['function'] == 'userErrorHandler'
+                    && $first_trace['class'] == 'DigitalStars\SimpleVK\SimpleVK')
+            {
+                unset($trace_data[0]); //userErrorHandler()
+                $trace_data = array_values($trace_data); //сбрасываем индексы
+            }
+            $trace_index_start = 0;
+        } else {
+            $trace = $this->formatTraceLine(['file' => $file, 'line' => $line], 0);
+        }
+
+        foreach ($trace_data as $num => $data) {
+            $trace .= $this->formatTraceLine($data, $num + $trace_index_start);
         }
 
         return $trace;
