@@ -39,23 +39,26 @@ SimpleVK - это фреймворк для создания ботов. Вам 
 * `Bots Long Poll API`
 * `Streaming API`
 * Карусели и все виды кнопок
-* Создание ботов на пользовательских аккаунтах
+* Создание ботов на группах / пользователях
 * Работа с голосовыми сообщениями, документами и другими медиа-файлами
+
+## Решения проблем VK API
+* Игнорирование дублирующихся событий
+* Обработка невалидных JSON
+* Повторные запросы при недоступности серверов / API
+* Повторные запросы при некоторых ошибках VK API
+* Отсутствие повторных событий при долгой обработке события от VK
 
 # Подключение
 ### Используя composer
-1\. Установка в *Unix
-```
+1\. Установить
+```bash
 composer require digitalstars/simplevk:dev-testing
 ```
-1\. Установка в Windows
-> В Windows нет 2х модулей, из-за которых не работает многопоточность. Поэтому ставим с игнорированием зависимостей
-```
-composer require digitalstars/simplevk:dev-testing --ignore-platform-reqs
-```
-2\. Подключить `autoload.php` напрямую внутри бота
+
+2\. Подключить `autoload.php`
 ```php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 ```
 ### Вручную
 1. Скачать последний релиз c [github](https://github.com/digitalstars/simplevk/tree/testing)
@@ -69,7 +72,7 @@ require_once "simplevk-testing/autoload.php";
 Чтобы убедится, что вы установили все правильно, и ваш сервер готов к работе с SimpleVK, необходимо создать и запустить следующий скрипт:
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 \DigitalStars\SimpleVK\Diagnostics::run();
 ```
 > Если вы делаете longpoll бота, то запускайте диагностику через консоль  
@@ -86,7 +89,7 @@ require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\SimpleVK as vk;
 $vk = vk::create(ТОКЕН, '5.199')->setConfirm(STR); //STR - строка подтверждения сервера
 $vk->msg('Привет, ~!fn~')->send();
@@ -95,7 +98,7 @@ $vk->msg('Привет, ~!fn~')->send();
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\SimpleVK as vk;
 $vk = vk::create(ТОКЕН, '5.199')->setConfirm(STR); //STR - строка подтверждения сервера
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникние в скрипте
@@ -115,7 +118,7 @@ if($type == 'message_new') {
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\LongPoll;
 $vk = LongPoll::create(ТОКЕН, '5.199');
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникние в скрипте
@@ -132,7 +135,7 @@ $vk->listen(function () use ($vk) {
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\Bot;
 $bot = Bot::create(ТОКЕН, '5.199');
 $bot->cmd('img', '!картинка')->img('cat.jpg')->text('Вот твой кот');
@@ -142,7 +145,7 @@ $bot->run(); //запускаем обработку события
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\{Bot, LongPoll};
 $vk = LongPoll::create(ТОКЕН, '5.199');
 $bot = Bot::create($vk);
@@ -155,7 +158,7 @@ $vk->listen(function () use ($bot) {
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\{Bot, SimpleVK as vk};
 $vk = vk::create(ТОКЕН, '5.199');
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникшие в скрипте
@@ -176,7 +179,7 @@ $bot->run();
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\{Bot, SimpleVK as vk};
 $vk = vk::create(ТОКЕН, '5.199');
 $vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникшие в скрипте
@@ -191,7 +194,7 @@ $bot->run();
 
 ```php
 <?php
-require_once __DIR__.'/vendor/digitalstars/simplevk/autoload.php';
+require_once __DIR__.'/vendor/autoload.php';
 use DigitalStars\SimpleVK\{Bot, Store, SimpleVK as vk};
 $vk = vk::create(ТОКЕН, '5.199');
 $bot = Bot::create($vk);
@@ -208,5 +211,30 @@ $bot->cmd('cmd2', '!напомни')->func(function ($msg, $params) use ($vk) {
 });
 $bot->run();
 ```
+
+### Конфиги
+```php
+<?php
+require_once __DIR__.'/vendor/autoload.php';
+use DigitalStars\SimpleVK\{SimpleVK, LongPoll, SimpleVkException, Setting, Auth, Request};
+
+Auth::setProxy('socks5://174.77.111.198:49547', 'password'); //прокси для всех сетевых запросов
+Request::errorSuppression(); //подавление генерации throw при ошибках в VK API. Результат выполнения API будет просто возвращатьсся
+
+//SimpleVK::disableSendOK(); //отключает разрыв соединения с VK при получение события. Может потребоваться для дебага через веб
+//SimpleVK::retryRequestsProcessing(); //включает обработку повторных запросов для callback, когда скрипт не работал
+
+SimpleVkException::setErrorDirPath(__DIR__ . '/my_errors/'); //установка папки для логирования ошибок бота и API
+SimpleVkException::disableWriteError(); //выключить запись логов в файл
+
+Setting::enableUniqueEventHandler(); //включение игнорирования дублирующихся событий (Нужен установленный redis)
+
+//LongPoll::enableInWeb(); //включение возможности запускать скрипт с LongPoll через web (!!! выключить можно будет только убив процесс)
+
+$vk = SimpleVK::create(TOKEN, '5.238');
+$vk->setUserLogError(YOUR_VK_ID)->shortTrace(); //отправка всех ошибок в VK и вкл отображение короткого трейса
+$vk->setTracePathFilter('C:\your\path'); //вырезание путей из трейса для его укорочения
+```
+
 ## Больше примеров
 Находятся на сайте с документацией в [разделе примеров](https://simplevk.scripthub.ru/v3/install/examples.html), а также в документации есть примеры для каждого метода классов.
