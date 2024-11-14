@@ -2,7 +2,7 @@
 
 namespace DigitalStars\SimpleVK;
 
-const SIMPLEVK_VERSION = '3.1.12-beta';
+const SIMPLEVK_VERSION = '3.1.13-beta';
 // массив кодов ошибок ВК, при которых идет 5 попыток выполнить этот запрос с перерывом в 10 секунд
 const ERROR_CODES_FOR_MANY_TRY = [
     1, //Произошла неизвестная ошибка.
@@ -55,5 +55,3 @@ const DEFAULT_APP = [
 const DEFAULT_ERROR_LOG = E_ALL; //E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR
 // Автосохранение авторизации
 const AUTO_SAVE_AUTH = True;
-// Директория запуска корневого скрипта
-DEFINE('DIRNAME', dirname(current(get_included_files())));
