@@ -272,7 +272,7 @@ class Bot {
         }
         $source = "<?php " . PHP_EOL . join(PHP_EOL, $namespaces_all) . PHP_EOL . $source;
 
-        file_put_contents(DIRNAME . "/" . $file . ".php", $source);
+        file_put_contents(__DIR__ . "/$file.php", $source);
         if ($is_write)
             echo "Процесс компиляции завершён" . PHP_EOL;
         return $source;

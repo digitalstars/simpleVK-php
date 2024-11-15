@@ -4,7 +4,7 @@ namespace DigitalStars\SimpleVK;
 
 class Store {
     public $data = null;
-    public static $path = DIRNAME . "/cache";
+    public static $path = __DIR__ . "/cache";
     private $file;
     private $full_path;
     private $is_writable = false;

@@ -230,10 +230,10 @@ class Auth {
 
     private function saveCashed() {
         if ($this->is_save) {
-            if (!is_dir(DIRNAME . "/cache") && !mkdir($concurrentDirectory = DIRNAME . "/cache") && !is_dir($concurrentDirectory)) {
+            if (!is_dir(__DIR__ . "/cache") && !mkdir($concurrentDirectory = __DIR__ . "/cache") && !is_dir($concurrentDirectory)) {
                 throw new \RuntimeException(sprintf('Directory "%s" was not created', $concurrentDirectory));
             }
-            $path = DIRNAME . "/cache/" . hash('sha256', $this->login . $this->pass) . ".php";
+            $path = __DIR__ . "/cache/" . hash('sha256', $this->login . $this->pass) . ".php";
             file_put_contents($path, $this->cashed_salt .
                 base64_encode(
                     json_encode(
@@ -251,7 +251,7 @@ class Auth {
 
     private function loadCashed() {
         if ($this->is_save) {
-            $path = DIRNAME . "/cache/" . hash('sha256', $this->login . $this->pass) . ".php";
+            $path = __DIR__ . "/cache/" . hash('sha256', $this->login . $this->pass) . ".php";
             if (file_exists($path)) {
                 $cashed_data = json_decode(
                     base64_decode(
