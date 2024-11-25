@@ -9,6 +9,9 @@
         "ext-json": "*",
         "ext-mbstring": "*"
     },
+    "require-dev": {
+        "roave/security-advisories": "dev-latest"
+    },
     "suggest": {
         "ext-redis": "Используется для обнаружения дублирующихся событий от VK API и их игнорирования",
         "ext-pcntl": "Автоматическая многопоточная обработка событий через Longpoll",
