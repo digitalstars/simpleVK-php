@@ -1,21 +1,16 @@
 <?php
 namespace DigitalStars\SimpleVK;
-$path_dir =  __DIR__.'/src';
-require_once($path_dir.'/Request.php');
-require_once($path_dir.'/FileUploader.php');
-require_once($path_dir.'/BaseConstructor.php');
-require_once($path_dir.'/Carousel.php');
-require_once($path_dir.'/Message.php');
-require_once($path_dir.'/Post.php');
-require_once($path_dir.'/ErrorHandler.php');
-require_once($path_dir.'/Setting.php');
-require_once($path_dir.'/SimpleVK.php');
-require_once($path_dir.'/SimpleVkException.php');
-require_once($path_dir.'/Auth.php');
-require_once($path_dir.'/LongPoll.php');
-require_once($path_dir.'/Streaming.php');
-require_once($path_dir.'/SiteAuth.php');
-require_once($path_dir.'/Bot.php');
-require_once($path_dir.'/Store.php');
-require_once($path_dir.'/Diagnostics.php');
-require_once($path_dir.'/Internal/UniqueEventHandler.php');
+
+require __DIR__ . '/src/Compatibility.php';
+
+//Динамическое подключение классов, только при его использовании
+spl_autoload_register(static function ($class) {
+    if (str_starts_with($class, 'DigitalStars\\SimpleVK')) {
+        $baseDir = __DIR__ . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR;
+        $class = str_replace('DigitalStars\\SimpleVK\\', '', $class);
+        $file = $baseDir . "$class.php";
+        if (file_exists($file)) {
+            require $file;
+        }
+    }
+});
