@@ -2,42 +2,70 @@
 
 namespace DigitalStars\SimpleVK\Internal;
 
+use DigitalStars\SimpleVK\Cache\RedisCache;
+use DigitalStars\SimpleVK\Psr\SimpleCache\CacheInterface;
 use Redis;
+use Exception;
 
 class UniqueEventHandler {
-    private static ?Redis $redis = null;
+    private static ?CacheInterface $cache = null;
     private static int $cache_ttl = 259200; // 3 дня
     private static bool $is_enabled = false;
 
-    public static function enable(string $redis_host = 'localhost', int $redis_port = 6379, int $event_ttl = 259200): void {
+    /**
+     * Включение обработки уникальных событий
+     *
+     * @param CacheInterface|null $cache Кастомный PSR-16 кэш
+     * @param string $redis_host Хост Redis (используется, если $cache не указан)
+     * @param int $redis_port Порт Redis (используется, если $cache не указан)
+     * @param int $event_ttl Время жизни записи в кэше
+     * @return void
+     */
+    public static function enable(
+        ?CacheInterface $cache = null,
+        string $redis_host = 'localhost',
+        int $redis_port = 6379,
+        int $event_ttl = 259200
+    ): void {
         self::$cache_ttl = $event_ttl;
-        self::initializeRedis($redis_host, $redis_port);
+
+        if ($cache !== null) {
+            self::$cache = $cache;
+        } else {
+            self::$cache = self::initializeRedisCache($redis_host, $redis_port);
+        }
+
+        self::$is_enabled = true;
     }
 
+    /**
+     * Добавляет событие в кэш
+     *
+     * @param string $event_id
+     * @return bool True, если событие уже было обработано, иначе False
+     */
     public static function addEventToCache(string $event_id): bool {
-        if (!self::$is_enabled) {
+        if (!self::$is_enabled || self::$cache === null) {
             return false;
         }
 
-        if (self::isEventProcessed($event_id)) {
+        $key = "svk_event_$event_id";
+
+        if (self::$cache->has($key)) {
             return true; // дубликат
         }
 
-        self::$redis->set("svk_event_$event_id", true, self::$cache_ttl);
+        self::$cache->set($key, true, self::$cache_ttl);
         return false;
     }
 
-    private static function isEventProcessed(string $event_id): bool {
-        return (bool) self::$redis->exists("svk_event_$event_id");
-    }
-
-    private static function initializeRedis(string $redis_host, int $redis_port): void {
-        if (!self::$redis && class_exists(Redis::class) && extension_loaded('redis')) {
-            self::$redis = new Redis();
+    private static function initializeRedisCache(string $redis_host, int $redis_port): RedisCache {
+        if (class_exists(Redis::class) && extension_loaded('redis')) {
             try {
-                self::$redis->connect($redis_host, $redis_port);
-                self::$is_enabled = true;
-            } catch (\Exception $exception) {
+                $redis = new Redis();
+                $redis->connect($redis_host, $redis_port);
+                return new RedisCache($redis);
+            } catch (Exception $exception) {
                 trigger_error("Redis недоступен: " . $exception->getMessage(), E_USER_ERROR);
             }
         } else {
