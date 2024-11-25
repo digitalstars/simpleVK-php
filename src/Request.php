@@ -55,6 +55,7 @@ trait Request {
                     continue;
                 }
 //                $this->time_checker += (microtime(true) - $time_start2);
+
                 throw new SimpleVkException($e->getCode(), $e->getMessage());
             }
         }
@@ -78,7 +79,7 @@ trait Request {
             return $result;
         }
 
-        if (isset($result['error']) || !isset($result) || $is_json_error) {
+        if (isset($result['error']) || !isset($result) || $is_json_error || curl_errno($ch)) {
             if($is_use_method) {
                 $access_token = substr($params['access_token'], 0, 10) . '****';
                 $v = $params['v'];
@@ -97,6 +98,18 @@ trait Request {
                     ] + $params;
             } else {
                 $params['url'] = $url;
+            }
+
+            $errorCode = curl_errno($ch);
+
+            if($errorCode == CURLE_COULDNT_CONNECT ||$errorCode == CURLE_COULDNT_RESOLVE_HOST) {
+                $error_code = 77779;
+                throw new SimpleVkException($error_code, 'Нет соедиения с сервером VK API. Проверьте доступность сети.');
+            }
+
+            if($errorCode == CURLE_OPERATION_TIMEOUTED) {
+                $error_code = 77780;
+                throw new SimpleVkException($error_code, 'Время ожидания соединения с VK API истекло.');
             }
 
             if (!isset($result)) {
