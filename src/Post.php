@@ -36,7 +36,7 @@ class Post extends BaseConstructor {
             $id = $this->vk->userInfo()['id'];
         }
         $this->config_cache = $this->config;
-        if ($this->preProcessing(null))
+        if ($this->preProcessing(null)) //вернет true, если замыкание события вернуло true (наверно остановка какая-то?)
             return null;
 
         if (isset($this->config['real_id']) and $this->config['real_id'] != 0)
