@@ -10,12 +10,16 @@
         "ext-mbstring": "*"
     },
     "require-dev": {
-        "roave/security-advisories": "dev-latest"
+        "roave/security-advisories": "dev-latest",
+        "phpunit/phpunit": "^11",
+        "mockery/mockery": "^1.6",
+        "ext-openssl": "*"
     },
     "suggest": {
         "ext-redis": "Используется для обнаружения дублирующихся событий от VK API и их игнорирования",
         "ext-pcntl": "Автоматическая многопоточная обработка событий через Longpoll",
-        "ext-posix": "Автоматическая многопоточная обработка событий через Longpoll"
+        "ext-posix": "Автоматическая многопоточная обработка событий через Longpoll",
+        "ext-ffi": "Используется в модуле на С для ускорения проверки и разбивки отправляемых сообщений"
     },
     "autoload": {
         "files": [

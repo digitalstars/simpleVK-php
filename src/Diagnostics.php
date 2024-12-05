@@ -273,6 +273,8 @@ class Diagnostics {
         self::checkModuleGroup(['curl', 'json', 'mbstring']);
         self::$final_text .= self::EOL().self::formatText("Проверка активации рекомендуемых модулей в php.ini", 'cyan',  need_dot: false);
 
+        self::checkModuleGroup(['ffi'], add_eol: false);
+        self::$final_text .= self::formatText(' (Используется в модуле на С для ускорения проверки и разбивки отправляемых сообщений)', 'yellow', '', false) . self::EOL();
         self::checkModuleGroup(['redis'], add_eol: false);
         self::$final_text .= self::formatText(' (Используется для обнаружения дублирующихся событий от VK API и их игнорирования)', 'yellow', '', false) . self::EOL();
         self::checkModuleGroup(['pcntl', 'posix'], add_eol: false);

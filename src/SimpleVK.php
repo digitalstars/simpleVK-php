@@ -22,16 +22,34 @@ class SimpleVK {
     protected $group_id = null;
     public $time_checker = null;
 
-    public static function create($token, $version, $also_version = null) {
-        return new self($token, $version, $also_version);
+    protected static ?\FFI $ffi = null;
+
+    public static function create($token, $version, $also_version = null, $data = null) {
+        return new self($token, $version, $also_version, $data);
     }
 
-    public function __construct($token, $version, $also_version = null) {
+    public function __construct($token, $version, $also_version = null, $data = null) {
 
         if (!self::$retry_requests_processing &&
             ((function_exists('getallheaders') && isset(getallheaders()['X-Retry-Counter'])) ||
                 isset($_SERVER['HTTP_X_RETRY_COUNTER']))) {
             exit('ok');
+        }
+
+        if(!self::$ffi && extension_loaded("ffi")) {
+            if (PHP_OS === 'WINNT') {
+                $path = __DIR__."/../bin/convert_to_html_entities.dll";
+                self::$ffi = \FFI::cdef(
+                    "char* convert_to_html_entities(const char* input);
+                    void free_converted_string(char* result);", $path
+                );
+            } elseif (PHP_OS === 'Linux') {
+                $path = __DIR__."/../bin/convert_to_html_entities.so";
+                self::$ffi = \FFI::cdef(
+                    "char* convert_to_html_entities(const char* input);
+                    void free_converted_string(char* result);", $path
+                );
+            }
         }
 
         if ((double)($version) <  5.139) {
@@ -652,17 +670,89 @@ class SimpleVK {
         return $this;
     }
 
-    public function request($method, $params = [], $use_placeholders = true) {
-        $time_start = microtime(true);
-        $messages = [];
-        if (isset($params['message'])) {
-            if($use_placeholders) {
-                $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
-            }
-            if($method == 'messages.send') {
-                $messages = $this->lengthMessageProcessing($params['message']);
+    private function convertMessageToHtmlEntities($message) {
+        if (self::$ffi !== null) {
+            $result = self::$ffi->convert_to_html_entities($message);
+            $message_with_html_entities = \FFI::string($result);
+            self::$ffi->free_converted_string($result);
+            return $message_with_html_entities;
+        }
+        return $this->convertToHtmlEntities($message);
+    }
+
+    /**
+     * Преобразует строку в HTML-сущности для безопасного отображения в HTML.
+     * Обрабатывает только эмодзи и символы за пределами BMP (U+10000 и выше).
+     * Специальные HTML-символы (например, <, >, &) обрабатываются как обычно.
+     */
+    protected function convertToHtmlEntities($string) {
+        if (empty($string)) {
+            return "";
+        }
+
+        $result = '';
+        foreach (mb_str_split($string, 1, 'UTF-8') as $char) {
+            $codepoint = mb_ord($char, 'UTF-8');
+            if ($codepoint > 0xFFFF) {
+                // Для символов за пределами BMP (например, эмодзи)
+                $result .= "&#" . $codepoint . ";";
+            } else {
+                // Обрабатываем спецсимволы через htmlspecialchars
+                $result .= htmlspecialchars($char, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             }
         }
+
+        return $result;
+    }
+
+    protected function splitLongMessages($encodedHtml, $maxLength = 4096) {
+        $text_len = strlen($encodedHtml);
+        $parts = [];
+        $start = 0;
+
+        while ($start < $text_len) {
+            // Получаем подстроку длиной $maxLength
+            $currentPart = substr($encodedHtml, $start, $maxLength);
+
+            // Проверяем, не заканчивается ли часть на разорванной сущности
+            // Ищем последнюю закрывающую точку для сущности (возможность, что сущность будет в следующей части)
+            $lastAmpersandPos = strrpos($currentPart, '&');
+            $lastSemicolonPos = strrpos($currentPart, ';');
+
+            // Если нашли амперсанд, но нет точки с запятой в пределах $maxLength, уменьшаем длину части
+            if ($lastAmpersandPos !== false && ($lastSemicolonPos === false || $lastSemicolonPos < $lastAmpersandPos)) {
+                // Уменьшаем длину на несколько символов, чтобы сущность ушла в следующую часть
+                $currentPart = substr($encodedHtml, $start, $lastAmpersandPos);
+            }
+
+            // Ищем сущности <br> или \n в последних 50 символах
+            $brEntityPos = strrpos($currentPart, '&lt;br&gt;');
+            $newlineEntityPos = strrpos($currentPart, "\n");
+
+            if ($brEntityPos !== false || $newlineEntityPos !== false) {
+                // Если найден либо сущность <br>, либо сущность новой строки, обрезаем строку до этого места
+                $splitPos = ($brEntityPos !== false) ? $brEntityPos : $newlineEntityPos;
+                $currentPart = substr($currentPart, 0, $splitPos + strlen($brEntityPos !== false ? '&lt;br&gt;' : "\n"));
+            }
+
+            // Добавляем текущую часть
+            $parts[] = $currentPart;
+
+            // Переходим к следующей части
+            $start += strlen($currentPart);
+        }
+
+        // Декодируем каждую часть обратно в HTML
+        $decodedParts = array_map(static function($part) {
+            return html_entity_decode($part, ENT_QUOTES, 'UTF-8');
+        }, $parts);
+
+        return $decodedParts;
+    }
+
+    public function request($method, $params = [], $use_placeholders = true) {
+        $time_start = microtime(true);
+
         if (isset($params['peer_id']) && is_array($params['peer_id'])) { //возможно везде заменить на peer_ids в методах
             $params['peer_ids'] = join(',', $params['peer_id']);
             unset($params['peer_id']);
@@ -677,7 +767,20 @@ class SimpleVK {
 
         $result = null;
 
-        if(!empty($messages)) {
+        if (isset($params['message']) && ($method === 'messages.send' || $method === 'messages.edit')) {
+            if($use_placeholders) {
+                $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
+            }
+
+            //точно влезет в лимит 4096, потому что 9 символов в html-сущности максимум
+            //поэтому конвертацию не делаем
+            if(mb_strlen($params['message']) <= 455) {
+                $messages = [$params['message']];
+            } else {
+                $message_with_html_entities = $this->convertMessageToHtmlEntities($params['message']);
+                $messages = $this->splitLongMessages($message_with_html_entities);
+            }
+
             foreach ($messages as $message) {
                 $params['message'] = $message;
                 $result = $this->runRequestWithAttempts($url, $params, $method);
@@ -779,52 +882,6 @@ class SimpleVK {
         } else
             $payload = null;
         return $payload;
-    }
-
-    protected function lengthMessageProcessing($message) {
-        $maxSmileyLimit = 1000.0; // Максимальный лимит сообщения в смайлах(целые)+символы
-        $maxTotalPlaces = 4096; // Общее максимальное количество символов и смайлов
-
-        $currentTotal = 0; // Текущая общая сумма символов и смайлов
-        $messages = [];
-
-        // Перебираем каждый символ в сообщении
-        $count = mb_strlen($message, 'UTF-8');
-
-        for ($i = 0; $i < $count; $i++) {
-            $char = mb_substr($message, $i, 1, 'UTF-8');
-            $code = mb_ord($char, 'UTF-8');
-
-            if(($code >= 0x1F300 && $code <= 0x1F64F) || ($code >= 0x1F600 && $code <= 0x1F64F)) {
-                //если это смайл или символ
-                --$maxSmileyLimit; //вычитаем 1ед. из лимита
-                $currentTotal += 2; // Учитываем 2 символа за смайл
-            } else {
-                $maxSmileyLimit -= 0.1115; //опытным путем, каждые 1000 символов позволяют добавить 111.5 смайлов
-                ++$currentTotal; // Учитываем 1 символ
-            }
-
-            // Если текущая общая сумма достигла или превысила максимальное количество символов или достигнул лимит в смайлах
-            if ($currentTotal >= $maxTotalPlaces || $maxSmileyLimit < 1) {
-                $last50Chars = mb_substr($message, max(0, $i - 49), 50, 'UTF-8');
-                $pos = mb_strrpos($last50Chars, "\n");
-                // Если нашли \n и разница между текущей позицией $i и $pos меньше 50
-                if ($pos !== false && ($i - (max(0, $i - 49) + $pos)) < 50) {
-                    $messagePart1 = mb_substr($message, 0, max(0, $i - 49) + $pos, 'UTF-8');
-                    $messagePart2 = mb_substr($message, max(0, $i - 49) + $pos + 1, null, 'UTF-8');
-                } else {
-                    // Разделяем сообщение по текущему символу \n
-                    $messagePart1 = mb_substr($message, 0, $i + 1, 'UTF-8');
-                    $messagePart2 = mb_substr($message, $i + 1, null, 'UTF-8');
-                }
-
-                $processedPart2 = $this->lengthMessageProcessing($messagePart2); // Рекурсивно обрабатываем оставшуюся часть
-                return [$messagePart1, ...$processedPart2]; // Возвращаем разделенные части
-            }
-        }
-
-        // Если не достигли максимального значения, возвращаем исходное сообщение
-        return [$message];
     }
 
     protected function checkTypeEvent() {
