@@ -3,7 +3,7 @@
 namespace DigitalStars\SimpleVK;
 
 class Post extends BaseConstructor {
-    public static function create($vk = null, &$cfg = null) {
+    public static function create($vk = null, &$cfg =  null) {
         return new self($vk, $cfg);
     }
 
