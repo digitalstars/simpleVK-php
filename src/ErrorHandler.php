@@ -61,6 +61,7 @@ trait ErrorHandler {
      * Публичный, потому что исключения могут вызываться и обрабатываться за пределами текущего класса
      */
     public function exceptionHandler(\Throwable $exception, int $set_type = E_ERROR, bool $is_artificial_trace = false): void {
+
         $message = $this->normalizeMessage($exception->getMessage());
         $message = $this->filterPaths($message);
         $message = $this->coloredLog($message, 'RED');
@@ -68,7 +69,13 @@ trait ErrorHandler {
         $line = $this->normalizeMessage($exception->getLine());
         $code = $exception->getCode();
 
-        $trace = $this->buildNewTrace($exception->getTrace(), $file, $line, $is_artificial_trace);
+        $trace = $exception->getTrace();
+        if (empty($trace)) {
+            $trace = [
+                ['file' => $file, 'line' => $line, 'function' => 'Unknown function']
+            ];
+        }
+        $trace = $this->buildNewTrace($trace, $file, $line, $is_artificial_trace);
 
         $this->userErrorHandler($set_type, $message . "\n\n\n$trace", $file, $line, $code, $exception, $is_artificial_trace);
     }
@@ -246,7 +253,7 @@ trait ErrorHandler {
         }
 
         //добавляем строку ошибки в трейс на 0-е место
-        if (!$is_artificial_trace && ($trace_data[0]['file'] != $file || $trace_data[0]['line'] != $line)) {
+        if (!$is_artificial_trace && isset($trace_data[0]) && ($trace_data[0]['file'] != $file || $trace_data[0]['line'] != $line)) {
             array_unshift($trace_data, ['file' => $file, 'line' => $line]);
         }
 
