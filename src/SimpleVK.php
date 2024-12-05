@@ -781,7 +781,7 @@ class SimpleVK {
 
         $result = null;
 
-        if (isset($params['message']) && ($method === 'messages.send' || $method === 'messages.edit')) {
+        if (isset($params['message']) && $method === 'messages.send') { //edit нет смысла, просто 2 раза обновится сообщение
             if($use_placeholders) {
                 $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
             }
