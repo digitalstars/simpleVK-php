@@ -57,7 +57,12 @@ class SimpleVK {
         }
 
         $this->processAuth($token, $version, $also_version);
-        $this->data = json_decode(file_get_contents('php://input'), 1);
+        if($data) {
+            $this->data = json_decode($data, 1);
+        } else {
+            $this->data = json_decode(file_get_contents('php://input'), 1);
+        }
+
         $this->data_backup = $this->data;
 
         if (isset($this->data['type']) && $this->data['type'] != 'confirmation') {
@@ -367,6 +372,15 @@ class SimpleVK {
                 'type' => 'show_snackbar',
                 'text' => $text
             ], JSON_THROW_ON_ERROR)
+        ]);
+    }
+
+    public function eventAnswerEmpty() { //для прекращения спиннера
+        $this->checkTypeEvent();
+        $this->request('messages.sendMessageEventAnswer', [
+            'event_id' => $this->data['object']['event_id'],
+            'user_id' => $this->data['object']['user_id'],
+            'peer_id' => $this->data['object']['peer_id']
         ]);
     }
 
