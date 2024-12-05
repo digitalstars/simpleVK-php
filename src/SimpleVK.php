@@ -719,7 +719,19 @@ class SimpleVK {
         return $result;
     }
 
-    protected function splitLongMessages($encodedHtml, $maxLength = 4096) {
+    /**
+     * Разделяет длинную строку, закодированную в HTML-сущности, на несколько частей,
+     * гарантируя целостность сущностей и учитывая разрывы строк или другие точки разрыва
+     * в пределах последних символов части.
+     *
+     * @param string $encodedHtml      Исходная строка, содержащая HTML-сущности, которую нужно разделить.
+     * @param int $maxLength        Максимальная длина каждой части. По умолчанию 4096 символов.
+     * @param int $tailSearchLimit  Количество символов в конце части, в пределах которых
+     *                                 будет производиться поиск разрывов (например, \n или < br>).
+     *
+     * @return string[] Массив строк, каждая из которых является частью исходного текста.
+     */
+    protected function splitLongMessages(string $encodedHtml, int $maxLength = 4096, int $tailSearchLimit = 150) {
         $text_len = strlen($encodedHtml);
         $parts = [];
         $start = 0;
@@ -729,24 +741,25 @@ class SimpleVK {
             $currentPart = substr($encodedHtml, $start, $maxLength);
 
             // Проверяем, не заканчивается ли часть на разорванной сущности
-            // Ищем последнюю закрывающую точку для сущности (возможность, что сущность будет в следующей части)
             $lastAmpersandPos = strrpos($currentPart, '&');
             $lastSemicolonPos = strrpos($currentPart, ';');
 
-            // Если нашли амперсанд, но нет точки с запятой в пределах $maxLength, уменьшаем длину части
             if ($lastAmpersandPos !== false && ($lastSemicolonPos === false || $lastSemicolonPos < $lastAmpersandPos)) {
-                // Уменьшаем длину на несколько символов, чтобы сущность ушла в следующую часть
-                $currentPart = substr($encodedHtml, $start, $lastAmpersandPos);
+                // Если сущность разорвана, обрезаем до последнего амперсанда
+                $currentPart = substr($currentPart, 0, $lastAmpersandPos);
             }
 
-            // Ищем сущности <br> или \n в последних 50 символах
-            $brEntityPos = strrpos($currentPart, '&lt;br&gt;');
-            $newlineEntityPos = strrpos($currentPart, "\n");
+            // Ограничиваем поиск сущностей последними $tailSearchLimit символами
+            $tail = substr($currentPart, -$tailSearchLimit);
+            $brEntityPos = strrpos($tail, '&lt;br&gt;');
+            $newlineEntityPos = strrpos($tail, "\n");
 
             if ($brEntityPos !== false || $newlineEntityPos !== false) {
-                // Если найден либо сущность <br>, либо сущность новой строки, обрезаем строку до этого места
-                $splitPos = ($brEntityPos !== false) ? $brEntityPos : $newlineEntityPos;
-                $currentPart = substr($currentPart, 0, $splitPos + strlen($brEntityPos !== false ? '&lt;br&gt;' : "\n"));
+                // Если найдена сущность, обрезаем строку до её конца
+                $splitPos = ($brEntityPos !== false)
+                    ? strlen($currentPart) - $tailSearchLimit + $brEntityPos + strlen('&lt;br&gt;')
+                    : strlen($currentPart) - $tailSearchLimit + $newlineEntityPos + strlen("\n");
+                $currentPart = substr($currentPart, 0, $splitPos);
             }
 
             // Добавляем текущую часть
@@ -757,11 +770,7 @@ class SimpleVK {
         }
 
         // Декодируем каждую часть обратно в HTML
-        $decodedParts = array_map(static function($part) {
-            return html_entity_decode($part, ENT_QUOTES, 'UTF-8');
-        }, $parts);
-
-        return $decodedParts;
+        return array_map(static fn($part) => html_entity_decode($part, ENT_QUOTES, 'UTF-8'), $parts);
     }
 
     public function request($method, $params = [], $use_placeholders = true) {
