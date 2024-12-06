@@ -721,52 +721,76 @@ class SimpleVK {
 
     /**
      * Разделяет длинную строку, закодированную в HTML-сущности, на несколько частей,
-     * гарантируя целостность сущностей и учитывая разрывы строк или другие точки разрыва
+     * гарантируя целостность сущностей и учитывая разрывы строк и разрывы слов
      * в пределах последних символов части.
      *
      * @param string $encodedHtml      Исходная строка, содержащая HTML-сущности, которую нужно разделить.
      * @param int $maxLength        Максимальная длина каждой части. По умолчанию 4096 символов.
      * @param int $tailSearchLimit  Количество символов в конце части, в пределах которых
      *                                 будет производиться поиск разрывов (например, \n или < br>).
+     * @param int $spaceSearchLimit Количество символов в конце части, в пределах которых
+     *                                 будет производиться поиск пробелов для разделения в случае разрыва.
      *
      * @return string[] Массив строк, каждая из которых является частью исходного текста.
      */
-    protected function splitLongMessages(string $encodedHtml, int $maxLength = 4096, int $tailSearchLimit = 150) {
-        $text_len = strlen($encodedHtml);
+    protected function splitLongMessages(
+        string $encodedHtml,
+        int $maxLength = 4096,
+        int $tailSearchLimit = 150,
+        int $spaceSearchLimit = 25
+    ): array {
+        $text_len = mb_strlen($encodedHtml, 'UTF-8');
         $parts = [];
         $start = 0;
 
         while ($start < $text_len) {
-            // Получаем подстроку длиной $maxLength
-            $currentPart = substr($encodedHtml, $start, $maxLength);
+            $currentPart = mb_substr($encodedHtml, $start, $maxLength, 'UTF-8');
+            $isSplitByMaxLength = (mb_strlen($currentPart, 'UTF-8') === $maxLength);
 
-            // Проверяем, не заканчивается ли часть на разорванной сущности
-            $lastAmpersandPos = strrpos($currentPart, '&');
-            $lastSemicolonPos = strrpos($currentPart, ';');
+            // Проверяем только последние 9 символов текущей части
+            $lastChunk = mb_substr($currentPart, -9, null, 'UTF-8');
+            $lastAmpersandPos = mb_strrpos($lastChunk, '&', 0, 'UTF-8');
+            $lastSemicolonPos = mb_strrpos($lastChunk, ';', 0, 'UTF-8');
 
-            if ($lastAmpersandPos !== false && ($lastSemicolonPos === false || $lastSemicolonPos < $lastAmpersandPos)) {
-                // Если сущность разорвана, обрезаем до последнего амперсанда
-                $currentPart = substr($currentPart, 0, $lastAmpersandPos);
+            if ($lastAmpersandPos !== false) {
+                // Корректируем позицию начала сущности относительно всей строки
+                $relativeAmpersandPos = $maxLength - 9 + $lastAmpersandPos;
+
+                // Проверяем, не разорвана ли сущность
+                if ($lastSemicolonPos === false || $lastSemicolonPos < $lastAmpersandPos) {
+                    // Сущность разорвана — обрезаем до последнего амперсанда (начала сущности)
+                    $currentPart = mb_substr($currentPart, 0, $relativeAmpersandPos, 'UTF-8');
+                }
             }
 
-            // Ограничиваем поиск сущностей последними $tailSearchLimit символами
-            $tail = substr($currentPart, -$tailSearchLimit);
-            $brEntityPos = strrpos($tail, '&lt;br&gt;');
-            $newlineEntityPos = strrpos($tail, "\n");
+            // Проверяем перенос строки в последних $tailSearchLimit символах только если было разбитие по $maxLength
+            if ($isSplitByMaxLength) {
+                $tail = mb_substr($currentPart, -$tailSearchLimit, null, 'UTF-8');
+                $brEntityPos = mb_strrpos($tail, '&lt;br&gt;', 0, 'UTF-8');
+                $newlineEntityPos = mb_strrpos($tail, "\n", 0, 'UTF-8');
 
-            if ($brEntityPos !== false || $newlineEntityPos !== false) {
-                // Если найдена сущность, обрезаем строку до её конца
-                $splitPos = ($brEntityPos !== false)
-                    ? strlen($currentPart) - $tailSearchLimit + $brEntityPos + strlen('&lt;br&gt;')
-                    : strlen($currentPart) - $tailSearchLimit + $newlineEntityPos + strlen("\n");
-                $currentPart = substr($currentPart, 0, $splitPos);
+                if ($brEntityPos !== false || $newlineEntityPos !== false) {
+                    // Если найден перенос, обрезаем строку до его конца
+                    $splitPos = ($brEntityPos !== false)
+                        ? mb_strlen($currentPart, 'UTF-8') - $tailSearchLimit + $brEntityPos + mb_strlen('&lt;br&gt;', 'UTF-8')
+                        : mb_strlen($currentPart, 'UTF-8') - $tailSearchLimit + $newlineEntityPos + mb_strlen("\n", 'UTF-8');
+                    $currentPart = mb_substr($currentPart, 0, $splitPos, 'UTF-8');
+                } else {
+                    // Если перенос строки не найден, ищем пробел в последних $spaceSearchLimit символах
+                    $spaceTail = mb_substr($currentPart, -$spaceSearchLimit, null, 'UTF-8');
+                    $spacePos = mb_strrpos($spaceTail, ' ', 0, 'UTF-8');
+                    if ($spacePos !== false) {
+                        $splitPos = mb_strlen($currentPart, 'UTF-8') - $spaceSearchLimit + $spacePos;
+                        $currentPart = mb_substr($currentPart, 0, $splitPos, 'UTF-8');
+                    }
+                }
             }
 
             // Добавляем текущую часть
             $parts[] = $currentPart;
 
             // Переходим к следующей части
-            $start += strlen($currentPart);
+            $start += mb_strlen($currentPart, 'UTF-8');
         }
 
         // Декодируем каждую часть обратно в HTML

@@ -53,14 +53,13 @@ char* convert_to_html_entities(const char* input) {
                 case '"':  pos += snprintf(result + pos, result_size - pos, "&quot;"); break;
                 case '\'': pos += snprintf(result + pos, result_size - pos, "&#39;"); break;
                 default:
-                    // Для символов, не являющихся зарезервированными HTML-символами
-                    if (codepoint > 127) {
-                        // Для всех символов не-ASCII - используем числовую HTML-сущность
-                        pos += snprintf(result + pos, result_size - pos, "&#%u;", codepoint);
+                    // Если символ внутри BMP (U+0000..U+FFFF), оставляем как есть
+                    if (codepoint <= 0xFFFF) {
+                         memcpy(result + pos, input + i, char_len);
+                         pos += char_len;
                     } else {
-                        // Для ASCII символов - копируем как есть
-                        memcpy(result + pos, input + i, char_len);
-                        pos += char_len;
+                        // Для символов за пределами BMP (эмодзи и т.д.) — используем числовую HTML-сущность
+                        pos += snprintf(result + pos, result_size - pos, "&#%u;", codepoint);
                     }
                     break;
             }
