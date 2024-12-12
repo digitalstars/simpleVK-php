@@ -16,7 +16,7 @@ class LongPoll extends SimpleVK {
     private static $longpoll_in_web = false;
     public static $use_user_long_poll = 0;
 
-    public function __construct($token, $version, $also_version = null) {
+    public function __construct($token, $version, $also_version = null, $data = null) {
         if (php_sapi_name() !== "cli" && self::$longpoll_in_web == false)
             die("Запуск longpoll возможен только в cli. Используйте LongPoll::enableInWeb() чтобы убрать это ограничение.");
         $this->multiThread();
@@ -38,8 +38,8 @@ class LongPoll extends SimpleVK {
         $this->getLongPollServer();
     }
 
-    public static function create($token, $version, $also_version = null) {
-        return new self($token, $version, $also_version);
+    public static function create($token, $version, $also_version = null, $data = null) {
+        return new self($token, $version, $also_version, $data);
     }
 
     public static function enableInWeb($bool = true) {
