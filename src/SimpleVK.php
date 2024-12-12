@@ -44,7 +44,7 @@ class SimpleVK {
                     void free_converted_string(char* result);", $path
                 );
             } elseif (PHP_OS === 'Linux') {
-                $path = __DIR__."/../bin/libconvert_to_html_entities.co";
+                $path = __DIR__."/../bin/libconvert_to_html_entities.so";
                 self::$ffi = \FFI::cdef(
                     "char* convert_to_html_entities(const char* input);
                     void free_converted_string(char* result);", $path
