@@ -29,5 +29,10 @@
         "psr-4": {
             "DigitalStars\\SimpleVK\\": "src/"
         }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "php src/diagnostics_run.php"
+        ]
     }
 }
