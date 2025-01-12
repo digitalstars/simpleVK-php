@@ -1,3 +1,3 @@
 <?php
-require_once 'Diagnostics.php';
+require_once __DIR__ . '/Diagnostics.php';
 \DigitalStars\SimpleVK\Diagnostics::run();

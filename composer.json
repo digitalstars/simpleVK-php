@@ -31,6 +31,9 @@
         }
     },
     "scripts": {
+        "post-update-cmd": [
+            "php src/diagnostics_run.php"
+        ],
         "post-install-cmd": [
             "php src/diagnostics_run.php"
         ]
