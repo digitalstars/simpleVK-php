@@ -15,9 +15,9 @@ class SimpleVkException extends Exception {
     private static bool $write_error = true;
     private static string $error_dir_path = '';
 
-    public function __construct(int $code, string $message, Throwable $previous = null) {
-        if (self::$write_error) {
-            self::ensureErrorDirectoryExists();
+    public function __construct(int $code, string $message, ?Throwable $previous = null) {
+        if (self::$write_error && !in_array($code, ERROR_CODES_FOR_MANY_TRY)) {
+            //self::ensureErrorDirectoryExists();
             $this->logError($code, $message);
         }
         parent::__construct($message, $code, $previous);
@@ -95,7 +95,7 @@ class SimpleVkException extends Exception {
      */
     private static function ensureErrorDirectoryExists(?string $path = null): void {
         if(!self::$error_dir_path) {
-            self::$error_dir_path = getcwd() . DIRECTORY_SEPARATOR. 'error';
+            self::$error_dir_path = getcwd() . DIRECTORY_SEPARATOR . 'error';
         }
         $path = $path ?: self::$error_dir_path;
         if (!is_dir($path)) {
