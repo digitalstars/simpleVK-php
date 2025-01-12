@@ -104,7 +104,7 @@ trait ErrorHandler {
                 return true;
             }
 
-            [$error_level, $error_type] = $this->defaultErrorLevelMap()[$type];
+            [$error_level, $error_type] = $this->defaultErrorLevelMap()[$type] ?? ['NOTICE', 'NOTICE'];
             $error_level_str = $this->formatErrorLevel($error_level);
 
             $msg = "{$error_level_str}{$message}";
@@ -112,7 +112,7 @@ trait ErrorHandler {
             $msg_for_vk = preg_replace('/\033\[[0-9;]*m/', '', $msg); //Очистка от цвета
 
             if ($exception) {
-                print $msg;
+                print $msg_for_vk;
             }
 
             $this->dispatchErrorMessage($error_type, $msg_for_vk, $code, $exception);
@@ -147,7 +147,6 @@ trait ErrorHandler {
             E_USER_ERROR => ['ERROR', 'E_USER_ERROR'],
             E_USER_WARNING => ['WARNING', 'E_USER_WARNING'],
             E_USER_NOTICE => ['NOTICE', 'E_USER_NOTICE'],
-            E_STRICT => ['NOTICE', 'E_STRICT'],
             E_RECOVERABLE_ERROR => ['ERROR', 'E_RECOVERABLE_ERROR'],
             E_DEPRECATED => ['NOTICE', 'E_DEPRECATED'],
             E_USER_DEPRECATED => ['NOTICE', 'E_USER_DEPRECATED'],
