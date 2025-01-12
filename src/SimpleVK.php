@@ -37,6 +37,12 @@ class SimpleVK {
         }
 
         if(!self::$ffi && extension_loaded("ffi")) {
+            if (!in_array(ini_get('ffi.enable'), ['true', '1'], true)) {
+                @ini_set('ffi.enable', 'true');
+                if (!in_array(ini_get('ffi.enable'), ['true', '1'], true)) {
+                    throw new \RuntimeException("FFI is disabled in PHP configuration. Set ffi.enable = true");
+                }
+            }
             if (PHP_OS === 'WINNT') {
                 $path = __DIR__."/../bin/convert_to_html_entities.dll";
                 self::$ffi = \FFI::cdef(
@@ -534,7 +540,7 @@ class SimpleVK {
      * @param int|null $peer_id По умолчанию peer_id из события
      * @return array|null
      */
-    public function setMute(int $seconds = 0, array|int $user_ids = [], int $peer_id = null): ?array {
+    public function setMute(int $seconds = 0, array|int $user_ids = [], ?int $peer_id = null): ?array {
         $this->initPeerID($from_peer_id)->initUserID($from_user_id);
 
         if($seconds < 0) {
@@ -566,7 +572,7 @@ class SimpleVK {
      * @param int|null $peer_id По умолчанию peer_id из события
      * @return array|null
      */
-    public function unsetMute(array|int $user_ids = [], int $peer_id = null): ?array {
+    public function unsetMute(array|int $user_ids = [], ?int $peer_id = null): ?array {
         $this->initPeerID($from_peer_id)->initUserID($from_user_id);
 
         if(!$from_peer_id && !$from_user_id && !$peer_id && !$user_ids) {
