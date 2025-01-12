@@ -40,8 +40,9 @@ class Diagnostics {
             $new_version_str = self::formatText("(Актуальная версия)", 'green', '', need_dot: false);
         }
 
-        self::$final_text .= self::formatText('Диагностика системы для работы с SimpleVK ' . SIMPLEVK_VERSION . " $new_version_str", 'cyan', need_dot: false)
-            . self::formatText('Информация о системе', 'cyan', need_dot: false);
+        print self::formatText('Диагностика системы для работы с SimpleVK ' . SIMPLEVK_VERSION . " $new_version_str", 'cyan', need_dot: false)
+            . self::formatText('Проверяем пинг до api.vk.com...', 'cyan', need_dot: false);
+            self::$final_text .= self::formatText('Информация о системе', 'cyan', need_dot: false);
 
     }
 
