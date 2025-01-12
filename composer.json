@@ -2,7 +2,8 @@
     "name": "digitalstars/simplevk",
     "description": "Library for easy work with VK com api",
     "license": "MIT",
-    "minimum-stability": "dev",
+    "minimum-stability": "beta",
+    "prefer-stable": true,
     "require": {
         "php": ">=8.0",
         "ext-curl": "*",
