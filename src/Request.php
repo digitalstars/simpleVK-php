@@ -79,6 +79,9 @@ trait Request {
             return $result;
         }
 
+        //при отправке peer_ids возвращается response[0], response[1]['error'] ... для каждого id
+        //тут это не обрабатывается и ошибка не вызывается
+
         if (isset($result['error']) || !isset($result) || $is_json_error || curl_errno($ch)) {
             if($is_use_method) {
                 $access_token = substr($params['access_token'], 0, 10) . '****';
