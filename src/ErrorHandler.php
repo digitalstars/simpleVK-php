@@ -4,6 +4,8 @@ namespace DigitalStars\SimpleVK;
 
 require_once('config_simplevk.php');
 
+use Throwable, Exception;
+
 trait ErrorHandler {
 
     private mixed $user_error_handler_or_ids = null;
@@ -14,10 +16,12 @@ trait ErrorHandler {
 
     private bool $send_error_in_vk = true;
 
+    private bool $is_exis_exiting = false;
+
     /**
      * Устанавливает обработчик ошибок и исключений, перенаправляя их для логирования и вывода.
      * @param int|array<int>|callable $ids VK ID пользователя, массив ID или функция-обработчик.
-     * @return self Возвращает текущий экземпляр для цепочки вызовов.
+     * @return SimpleVK|ErrorHandler|LongPoll Возвращает текущий экземпляр для цепочки вызовов.
      */
     public function setUserLogError(callable|array|int $ids): self {
         $this->user_error_handler_or_ids = is_numeric($ids) ? [$ids] : $ids;
@@ -50,7 +54,7 @@ trait ErrorHandler {
     /**
      * Оставляет в трейсе только пользовательские файлы, без файлов библиотеки
      * @param bool $enable - вкл/выкл отображение короткого трейса
-     * @return self Возвращает текущий экземпляр для цепочки вызовов.
+     * @return SimpleVK|ErrorHandler|LongPoll Возвращает текущий экземпляр для цепочки вызовов.
      */
     public function shortTrace(bool $enable = true): self {
         $this->short_trace = $enable;
@@ -60,7 +64,7 @@ trait ErrorHandler {
     /**
      * Публичный, потому что исключения могут вызываться и обрабатываться за пределами текущего класса
      */
-    public function exceptionHandler(\Throwable $exception, int $set_type = E_ERROR, bool $is_artificial_trace = false): void {
+    public function exceptionHandler(Throwable $exception, int $set_type = E_ERROR, bool $is_artificial_trace = false): void {
 
         $message = $this->normalizeMessage($exception->getMessage());
         $message = $this->filterPaths($message);
@@ -83,7 +87,7 @@ trait ErrorHandler {
     /**
      * Публичный, потому что исключения могут вызываться и обрабатываться за пределами текущего класса
      */
-    public function userErrorHandler(int $type, string $message, string $file, int $line, ?int $code = null, ?\Throwable $exception = null, bool $is_artificial_trace = false): bool {
+    public function userErrorHandler(int $type, string $message, string $file, int $line, ?int $code = null, ?Throwable $exception = null, bool $is_artificial_trace = false): bool {
         // если ошибка попадает в отчет (при использовании оператора "@" error_reporting() вернет 0)
         if (error_reporting() & $type) {
             $error_type_without_trace = [
@@ -98,7 +102,7 @@ trait ErrorHandler {
 
             if (!$is_artificial_trace && in_array($type, $error_type_without_trace, true)) {
                  //Создаем исскуственный трейс для ошибки не содержащей полного трейса
-                $exception = new SimpleVkException(0, $message);
+                $exception = new Exception($message);
                 // Передаем оригинальный тип ошибки и получаем полный трейс
                 $this->exceptionHandler($exception, $type, true);
                 return true;
@@ -107,17 +111,32 @@ trait ErrorHandler {
             [$error_level, $error_type] = $this->defaultErrorLevelMap()[$type] ?? ['NOTICE', 'NOTICE'];
             $error_level_str = $this->formatErrorLevel($error_level);
 
-            $msg = "{$error_level_str}{$message}";
-            $msg = str_replace("\n\n", "\n", $msg);
-            $msg_for_vk = preg_replace('/\033\[[0-9;]*m/', '', $msg); //Очистка от цвета
+            $color_msg = "$error_level_str$message";
+            $color_msg = str_replace("\n\n", "\n", $color_msg);
+            $clear_msg = preg_replace('/\033\[[0-9;]*m/', '', $color_msg); //Очистка от цвета
 
             if ($exception) {
-                print $msg_for_vk;
+                $is_regular_console = (PHP_SAPI === 'cli') &&
+                                    defined('STDOUT') &&
+                                    ($meta = stream_get_meta_data(STDOUT)) &&
+                                    $meta['wrapper_type'] === 'PHP' &&
+                                    $meta['stream_type'] === 'STDIO';
+
+                //Выводить цветное только если скрипт запущен из консоли и вывод не перенаправляется в файл
+                //При использовании nohup, crontab и т.д. вывод будет не цветным
+                print $is_regular_console ? $color_msg : $clear_msg;
             }
 
-            $this->dispatchErrorMessage($error_type, $msg_for_vk, $code, $exception);
+            //Если исключение не является SimpleVkException или, если является,
+            // то его код не входит в список ошибок для многократных попыток
+            if (!($exception instanceof SimpleVkException && in_array($code, ERROR_CODES_FOR_MANY_TRY, true))) {
+                SimpleVkException::logCustomError($clear_msg);
+            }
+
+            $this->dispatchErrorMessage($error_type, $clear_msg, $code, $exception);
 
             if(in_array($error_level, ['ERROR', 'CRITICAL'])) {
+                $this->is_exis_exiting = true; //чтобы не сработала register_shutdown_function()
                 exit();
             }
         }
@@ -125,6 +144,9 @@ trait ErrorHandler {
     }
 
     private function checkForFatalError(): void {
+        if($this->is_exis_exiting) {
+            return;
+        }
         if ($error = error_get_last()) {
             $type = $error['type'];
             if ($type & DEFAULT_ERROR_LOG) {
@@ -171,23 +193,24 @@ trait ErrorHandler {
             'WHITE'   => "\033[37m",
         ];
         $color_code = $color_codes[$color];
-        return "{$color_code}{$text}\033[0m";
+        return "$color_code$text\033[0m";
     }
 
-    private function dispatchErrorMessage(string $type, string $message, ?int $code = null, ?\Throwable $exception = null): void {
+    private function dispatchErrorMessage(string $type, string $message, ?int $code = null, ?Throwable $exception = null): void {
         if (is_callable($this->user_error_handler_or_ids)) {
             call_user_func($this->user_error_handler_or_ids, $type, $message, $code, $exception);
         } else {
             $peer_ids = implode(',', $this->user_error_handler_or_ids);
             if($this->send_error_in_vk) {
                 try {
+                    //Ошибки не вызываются при недоставке юзеру, потому что у peer_ids другой формат ответа
                     $this->request('messages.send', [ //отправка ошибки в ВК
                         'peer_ids' => $peer_ids,
                         'message' => $message,
                         'random_id' => 0,
                         'dont_parse_links' => 1
                     ], use_placeholders: false);
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     $this->send_error_in_vk = false;
                     $this->exceptionHandler($e, E_WARNING, true);
                 }
@@ -225,21 +248,31 @@ trait ErrorHandler {
         $message = str_replace(['Stack trace', "Array\n", "\n)", "\n#", "): "],
             ['STACK TRACE', 'Array ', ')', "\n\n#", "): \n"], $message);
 
-        return preg_replace_callback( //делим отступы пополам
-            "/\n */",
-            static function ($search) {
-                $indent_size = (int) ceil((mb_strlen($search[0]) - 1) / 2);
-                $indent = str_repeat("&#8199;", $indent_size);
-                return "\n" . $indent;
+        return preg_replace_callback(
+            '/\n( *)/', // ищем символ новой строки, за которым следует 0 или более пробелов (группа $matches[1])
+            static function ($matches) {
+                // Определяем количество пробелов после новой строки
+                $originalIndent = $matches[1];
+                $originalIndentLength = mb_strlen($originalIndent);
+
+                // Делим количество пробелов пополам (округляем в большую сторону)
+                $reducedIndentLength = (int) ceil($originalIndentLength / 2);
+
+                // неразрывный пробел
+                $narrowSpace = " ";
+
+                // Возвращаем новую строку с уменьшенным отступом
+                return "\n" . str_repeat($narrowSpace, $reducedIndentLength);
             },
             trim($message)
         );
+
     }
 
     private function buildNewTrace(array $trace_data, string $file, int $line, bool $is_artificial_trace): string {
         $trace = '';
 
-        //при отсутствии изначального трейса или это user_error
+        //при отсутствии изначального трейса или это user_error()
         //трейс был создан искуственно
         if($is_artificial_trace) {
             $first_trace = $trace_data[0] ?? null;
@@ -247,6 +280,7 @@ trait ErrorHandler {
                 && !isset($first_trace['file'])
                 && $first_trace['function'] == 'userErrorHandler'
                 && $first_trace['class'] == 'DigitalStars\SimpleVK\SimpleVK') {
+                //поледний трейс идет из SimpleVK класса, потому что он использует трейт ErrorHandler
                 array_shift($trace_data); //удаляем userErrorHandler()
             }
         }
@@ -265,23 +299,24 @@ trait ErrorHandler {
 
     private function formatTraceLine(array $trace, int $num): string {
 //        $type = $trace['type'] ?? '';
-//        $function = $trace['function'] ?? '{unknown function}';
-//        $class = $trace['class'] ?? '';
+        $function = $trace['function'] ?? '{unknown function}';
+        $class = $trace['class'] ?? '';
 //        $class = str_replace(["DigitalStars\DataBase\\", "DigitalStars\SimpleVK\\"], "", $class);
 //        $args = $trace['args'] ?? [];
         $trace_line = '';
         $file = $trace['file'] ?? 'unknown file';
         $line = $trace['line'] ?? '?';
 
+        //[internal function]
+
         $code_snippet = $this->getCodeSnippet($file, (int)$line);
-        $pattern = '#/(vendor|simplevk[^/]*/src)(/.*)#';
+        $pattern = '#/(vendor|simplevk[^/]*/src)(/.*)#i';
 
         $formatted_file = $this->filterPaths($file);
         if (isset($trace['file']) && preg_match($pattern, $formatted_file, $matches)) {
             $formatted_file = ".." . $matches[0];
             $user_file_marker = '';
         } elseif (!isset($trace['file']) || !$code_snippet) {
-            $formatted_file = 'Файл недоступен.';
             $user_file_marker = '';
         } else {
             $user_file_marker = '➡ ';
@@ -289,10 +324,17 @@ trait ErrorHandler {
 
         // Если короткий трейс выключен или это не файл библиотеки
         if (!$this->short_trace || !empty($user_file_marker)) {
-            $trace_line .= $this->coloredLog("{$user_file_marker}#{$num} ", 'GREEN')
-                . $this->coloredLog($formatted_file, 'BLUE')
-                . $this->coloredLog(":$line", 'YELLOW') . "\n"
-                . $this->coloredLog($code_snippet, 'WHITE') . "\n\n";
+            if(!isset($trace['file']) && !isset($trace['line'])) {
+                $trace_line .= $this->coloredLog("$user_file_marker#$num ", 'GREEN')
+                    . $this->coloredLog('[internal function]', 'BLUE'). "\n"
+                    . $this->coloredLog("?:", 'YELLOW')
+                    . $this->coloredLog(" $class->$function()", 'WHITE') . "\n\n";
+            } else {
+                $trace_line .= $this->coloredLog("$user_file_marker#$num ", 'GREEN')
+                    . $this->coloredLog($formatted_file, 'BLUE')
+                    . $this->coloredLog(":$line", 'YELLOW') . "\n"
+                    . $this->coloredLog($code_snippet, 'WHITE') . "\n\n";
+            }
         }
 
         return $trace_line;
