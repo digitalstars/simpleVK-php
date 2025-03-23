@@ -120,15 +120,15 @@ class Diagnostics {
             }
 
             return 'Windows'; // Если не удалось получить данные, просто выводим Windows
-        } else {
-            // Для Linux
-            $output = shell_exec('lsb_release -d'); // Ubuntu, Debian и подобные
-            if (!$output) {
-                // В случае, если lsb_release не установлен
-                $output = shell_exec('grep PRETTY_NAME /etc/os-release | cut -d= -f2- | tr -d \'"\'');
-            }
-            return $output ? 'Linux (' . trim(str_replace('Description:', '', $output)) . ')' : PHP_OS; // Форматируем вывод
         }
+
+// Для Linux
+        $output = shell_exec('lsb_release -d'); // Ubuntu, Debian и подобные
+        if (!$output) {
+            // В случае, если lsb_release не установлен
+            $output = shell_exec('grep PRETTY_NAME /etc/os-release | cut -d= -f2- | tr -d \'"\'');
+        }
+        return $output ? 'Linux (' . trim(str_replace('Description:', '', $output)) . ')' : PHP_OS; // Форматируем вывод
     }
 
     private static function isWindows() {
@@ -349,21 +349,22 @@ class Diagnostics {
             $usedPercentage = round(($usedMemoryGB / $totalMemoryGB) * 100, 2);
 
             return self::formatText("ОЗУ занято: $usedMemoryGB / $totalMemoryGB GB ($usedPercentage%)", 'green');
-        } else {
-            $free = shell_exec('free -m'); // Получаем данные сразу в мегабайтах
-            $free = trim($free);
-            $free_arr = explode("\n", $free);
-            $mem = preg_split('/\s+/', $free_arr[1]); // Разделяем строку по пробелам
-
-            $memtotal = round($mem[1] / 1000, 2); // Переводим в гигабайты
-            $memused = round($mem[2] / 1000, 2);
-
-            if ($memtotal) {
-                return self::formatText("ОЗУ занято: " . $memused . " / $memtotal GB (" . round($memused / $memtotal * 100) . "%)", 'green');
-            }
-
-            return self::formatText("Не удалось получить информацию об ОЗУ", 'yellow');
         }
+
+        //Linux
+        $free = shell_exec('free -m'); // Получаем данные сразу в мегабайтах
+        $free = trim($free);
+        $free_arr = explode("\n", $free);
+        $mem = preg_split('/\s+/', $free_arr[1]); // Разделяем строку по пробелам
+
+        $memtotal = round($mem[1] / 1000, 2); // Переводим в гигабайты
+        $memused = round($mem[2] / 1000, 2);
+
+        if ($memtotal) {
+            return self::formatText("ОЗУ занято: " . $memused . " / $memtotal GB (" . round($memused / $memtotal * 100) . "%)", 'green');
+        }
+
+        return self::formatText("Не удалось получить информацию об ОЗУ", 'yellow');
     }
 
     private static function getCpuInfo() {
