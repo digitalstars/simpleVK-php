@@ -10,6 +10,7 @@ class Diagnostics {
     public static function run() {
         self::initialize();
         self::webServerOrCli();
+        self::php_iniPatch();
         self::addSystemInfo();
         self::checkCurl();
         self::testPingVK();
@@ -34,26 +35,37 @@ class Diagnostics {
         }
 
         $latest_version = self::getLatestVersion();
-        if (version_compare(SIMPLEVK_VERSION, $latest_version, '<')) {
-            $new_version_str = self::formatText("(Доступна $latest_version)", 'yellow', '', need_dot: false);
+        if(!$latest_version) {
+            $new_version_str = self::formatText("(Не удалось узнать актуальную версию)", 'yellow', '', need_dot: false);
         } else {
-            $new_version_str = self::formatText("(Актуальная версия)", 'green', '', need_dot: false);
+            if (version_compare(SIMPLEVK_VERSION, $latest_version, '<')) {
+                $new_version_str = self::formatText("(Доступна $latest_version)", 'yellow', '', need_dot: false);
+            } else {
+                $new_version_str = self::formatText("(Актуальная версия)", 'green', '', need_dot: false);
+            }
         }
 
         print self::formatText('Диагностика системы для работы с SimpleVK ' . SIMPLEVK_VERSION . " $new_version_str", 'cyan', need_dot: false)
             . self::formatText('Проверяем пинг до api.vk.com...', 'cyan', need_dot: false);
-            self::$final_text .= self::formatText('Информация о системе', 'cyan', need_dot: false);
+        self::$final_text .= self::formatText('Информация о системе', 'cyan', need_dot: false);
 
     }
 
     private static function webServerOrCli() {
         if (PHP_SAPI == 'cli') {
-            self::$final_text .= self::formatText('Запущен через: командная строка', 'green');
-        } else if (isset($_SERVER['DOCUMENT_ROOT']) && isset($_SERVER['REQUEST_URI'])) {
+            self::$final_text .= self::formatText('Запущен через: командная строка (CLI)', 'green');
+        } else if (isset($_SERVER['DOCUMENT_ROOT'], $_SERVER['REQUEST_URI'])) {
             self::$final_text .= self::formatText('Запущен через: ' . PHP_SAPI, 'green');
         } else {
             self::$final_text .= self::formatText("Запущен через: Веб-сервер, но DOCUMENT_ROOT и REQUEST_URI не удалось получить", 'red');
         }
+    }
+
+    public static function php_iniPatch() {
+        $ini_file = php_ini_loaded_file();
+        self::$final_text .= $ini_file
+            ? self::formatText("Расположение файла конфигурации: {$ini_file}.", 'yellow')
+            : self::formatText('Не удалось определить расположение php.ini.', 'yellow');
     }
 
     private static function addSystemInfo() {
@@ -64,6 +76,9 @@ class Diagnostics {
     }
 
     private static function getLatestVersion() {
+        if (!extension_loaded('curl')) {
+            return null;
+        }
         $url = 'https://api.github.com/repos/digitalstars/simplevk/releases/latest';
 
         $ch = curl_init($url);
@@ -120,7 +135,7 @@ class Diagnostics {
         return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
     }
 
-    private static function formatText($text, $color, $separator = PHP_EOL, $need_dot = true) {
+    public static function formatText($text, $color, $separator = PHP_EOL, $need_dot = true) {
         if($separator === PHP_EOL) {
             $separator = self::EOL();
         }
@@ -269,7 +284,7 @@ class Diagnostics {
         }
     }
 
-    private static function checkModules() {
+    public static function checkModules() {
         self::$final_text .= self::EOL().self::formatText("Проверка активации обязательных модулей в php.ini", 'cyan', need_dot: false);
         self::checkModuleGroup(['curl', 'json', 'mbstring']);
         self::$final_text .= self::EOL().self::formatText("Проверка активации рекомендуемых модулей в php.ini", 'cyan',  need_dot: false);
@@ -278,11 +293,13 @@ class Diagnostics {
         self::$final_text .= self::formatText(' (Используется в модуле на С для ускорения проверки и разбивки отправляемых сообщений)', 'yellow', '', false) . self::EOL();
         self::checkModuleGroup(['redis'], add_eol: false);
         self::$final_text .= self::formatText(' (Используется для обнаружения дублирующихся событий от VK API и их игнорирования)', 'yellow', '', false) . self::EOL();
-        self::checkModuleGroup(['pcntl', 'posix'], add_eol: false);
-        self::$final_text .= self::formatText(' (Автоматическая многопоточная обработка событий через Longpoll)', 'yellow', '', false) . self::EOL();
+        if (!self::isWindows()) {
+            self::checkModuleGroup(['pcntl', 'posix'], add_eol: false);
+            self::$final_text .= self::formatText(' (Автоматическая многопоточная обработка событий через Longpoll)', 'yellow', '', false) . self::EOL();
+        }
 
-        self::$final_text .= self::EOL().self::formatText("Проверка активации других модулей в php.ini", 'cyan',  need_dot: false);
-        self::checkModuleGroup(['mysqli', 'pdo_mysql', 'sqlite3', 'pdo_sqlite', 'pgsql', 'pdo_pgsql']);
+        self::$final_text .= self::EOL().self::formatText("Проверка активации других часто используемых модулей в php.ini", 'cyan',  need_dot: false);
+        self::checkModuleGroup(['mysqli', 'pdo_mysql', 'sqlite3', 'pdo_sqlite', 'pgsql', 'pdo_pgsql', 'opcache', 'openssl', 'apcu']);
     }
 
     private static function checkModuleGroup($modules, $add_eol = true) {
@@ -411,7 +428,7 @@ class Diagnostics {
         return $return_text;
     }
 
-    private static function finish() {
+    public static function finish() {
         if (PHP_SAPI !== 'cli') {
             self::$final_text .= self::EOL().self::formatText("Проверка работы веб-сервера", 'cyan', need_dot: false);
             self::$final_text .= self::addNetworkChecks();
