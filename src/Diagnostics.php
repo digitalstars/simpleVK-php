@@ -5,7 +5,7 @@ namespace DigitalStars\SimpleVK;
 require_once 'config_simplevk.php';
 
 class Diagnostics {
-    private static string $final_text = '';
+    public static string $final_text = '';
 
     public static function run() {
         self::initialize();
@@ -468,7 +468,7 @@ class Diagnostics {
 HTML;
     }
 
-    private static function EOL() {
+    public static function EOL() {
         if (PHP_SAPI != 'cli') {
             return '<br>';
         }
