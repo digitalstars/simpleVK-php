@@ -101,7 +101,7 @@ trait ErrorHandler {
             ];
 
             if (!$is_artificial_trace && in_array($type, $error_type_without_trace, true)) {
-                 //Создаем исскуственный трейс для ошибки не содержащей полного трейса
+                //Создаем исскуственный трейс для ошибки не содержащей полного трейса
                 $exception = new Exception($message);
                 // Передаем оригинальный тип ошибки и получаем полный трейс
                 $this->exceptionHandler($exception, $type, true);
@@ -117,10 +117,14 @@ trait ErrorHandler {
 
             if ($exception) {
                 $is_regular_console = (PHP_SAPI === 'cli') &&
-                                    defined('STDOUT') &&
-                                    ($meta = stream_get_meta_data(STDOUT)) &&
-                                    $meta['wrapper_type'] === 'PHP' &&
-                                    $meta['stream_type'] === 'STDIO';
+                    defined('STDOUT') &&
+                    ($meta = stream_get_meta_data(STDOUT)) &&
+                    $meta['wrapper_type'] === 'PHP' &&
+                    $meta['stream_type'] === 'STDIO';
+
+                if(!$is_regular_console) {
+                    $clear_msg = "<pre>$clear_msg</pre>";
+                }
 
                 //Выводить цветное только если скрипт запущен из консоли и вывод не перенаправляется в файл
                 //При использовании nohup, crontab и т.д. вывод будет не цветным
@@ -245,28 +249,40 @@ trait ErrorHandler {
     }
 
     private function normalizeMessage(string $message): string {
-        $message = str_replace(['Stack trace', "Array\n", "\n)", "\n#", "): "],
-            ['STACK TRACE', 'Array ', ')', "\n\n#", "): \n"], $message);
+        // Шаг 1: Нормализуем запись Array (
+        $message = preg_replace('/Array\s*\n?\s*\(/is', '[', $message);
 
-        return preg_replace_callback(
-            '/\n( *)/', // ищем символ новой строки, за которым следует 0 или более пробелов (группа $matches[1])
-            static function ($matches) {
-                // Определяем количество пробелов после новой строки
-                $originalIndent = $matches[1];
-                $originalIndentLength = mb_strlen($originalIndent);
+        // Шаг 2: Заменяем закрывающие скобки на "]"
+        $message = str_replace(')', ']', $message);
 
-                // Делим количество пробелов пополам (округляем в большую сторону)
-                $reducedIndentLength = (int) ceil($originalIndentLength / 2);
+        // Шаг 3: Обрабатываем отступы
+        $lines = explode("\n", $message);
 
-                // неразрывный пробел
-                $narrowSpace = " ";
+        $result = [];
 
-                // Возвращаем новую строку с уменьшенным отступом
-                return "\n" . str_repeat($narrowSpace, $reducedIndentLength);
-            },
-            trim($message)
-        );
 
+        foreach ($lines as $line) {
+            // Определяем количество пробелов в начале строки
+            $leadingSpaces = strspn($line, ' ');
+
+            if ($leadingSpaces > 0) {
+                // Базовое сокращение пробелов в половину
+                $newIndent = floor($leadingSpaces / 2);
+
+                // Если после пробелов идет '[', уменьшаем еще на 1
+                if (isset($line[$leadingSpaces]) && $line[$leadingSpaces] === '[') {
+                    $newIndent = max(0, $newIndent + 2);
+                }
+
+                // Формируем новую строку с уменьшенным отступом
+                $content = substr($line, $leadingSpaces);
+                $line = str_repeat(' ', $newIndent) . $content;
+            }
+
+            $result[] = rtrim($line); // Удаляем пробелы в конце строки
+        }
+
+        return trim(implode("\n", $result));
     }
 
     private function buildNewTrace(array $trace_data, string $file, int $line, bool $is_artificial_trace): string {
