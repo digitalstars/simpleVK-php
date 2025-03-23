@@ -216,7 +216,7 @@ trait ErrorHandler {
                     ], use_placeholders: false);
                 } catch (Exception $e) {
                     $this->send_error_in_vk = false;
-                    $this->exceptionHandler($e, E_WARNING, true);
+                    trigger_error('Не удалось отправить ошибку в ЛС: ' . $e->getMessage(), E_USER_WARNING);
                 }
             }
         }
