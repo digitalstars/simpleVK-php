@@ -807,7 +807,6 @@ class SimpleVK {
         return array_map(static fn($part) => html_entity_decode($part, ENT_QUOTES, 'UTF-8'), $parts);
     }
 
-    public function request($method, $params = [], $use_placeholders = true) {
     public function request($method, $params = [], $use_placeholders = true, $dont_use_token = false) {
         $time_start = microtime(true);
 
