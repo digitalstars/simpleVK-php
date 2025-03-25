@@ -419,12 +419,16 @@ class SimpleVK {
     }
 
     public function dateRegistration($id) {
-        $site = file_get_contents("https://vk.com/foaf.php?id={$id}");
-        preg_match('<ya:created dc:date="(.*?)">', $site, $data);
-        $data = explode('T', $data[1]);
-        $date = date("d.m.Y", strtotime($data[0]));
-        $time = mb_substr($data[1], 0, 8);
-        return "$time $date";
+        $response = $this->request('restore.disablePageInit', ['user_id' => $id], dont_use_token: true);
+        return isset($response['user']['date_created'])
+            ? date("H:i:s d.m.Y", $response['user']['date_created'])
+            : null;
+//        $site = file_get_contents("https://vk.com/foaf.php?id={$id}");
+//        preg_match('<ya:created dc:date="(.*?)">', $site, $data);
+//        $data = explode('T', $data[1]);
+//        $date = date("d.m.Y", strtotime($data[0]));
+//        $time = mb_substr($data[1], 0, 8);
+//        return "$time $date";
     }
 
     public function buttonLocation($payload = null) {
@@ -804,6 +808,7 @@ class SimpleVK {
     }
 
     public function request($method, $params = [], $use_placeholders = true) {
+    public function request($method, $params = [], $use_placeholders = true, $dont_use_token = false) {
         $time_start = microtime(true);
 
         if (isset($params['peer_id']) && is_array($params['peer_id'])) { //возможно везде заменить на peer_ids в методах
@@ -811,7 +816,9 @@ class SimpleVK {
             unset($params['peer_id']);
         }
 
-        $params['access_token'] = $this->token;
+        if(!$dont_use_token) {
+            $params['access_token'] = $this->token;
+        }
         $params['v'] = $this->version;
         if (!is_null($this->group_id) && empty($params['group_id'])) {
             $params['group_id'] = $this->group_id; //а надо ли
