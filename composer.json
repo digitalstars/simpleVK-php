@@ -12,8 +12,6 @@
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest",
-        "phpunit/phpunit": "^11",
-        "mockery/mockery": "^1.6",
         "ext-openssl": "*"
     },
     "suggest": {
@@ -29,13 +27,5 @@
         "psr-4": {
             "DigitalStars\\SimpleVK\\": "src/"
         }
-    },
-    "scripts": {
-        "post-update-cmd": [
-            "php src/diagnostics_run.php"
-        ],
-        "post-install-cmd": [
-            "php src/diagnostics_run.php"
-        ]
     }
 }
