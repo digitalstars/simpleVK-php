@@ -11,7 +11,8 @@
 </p> 
 
 # SimpleVK 2
-[Документация SimpleVK 2](https://simplevk.scripthub.ru/v2/guide/guide.html) | [Документация SimpleVK 3](https://simplevk.scripthub.ru/v3/install/who_simplevk.html) | 
+> Версия SimpleVK 2 устарела и больше не поддерживается. Переходите на [SimpleVK 3](https://github.com/digitalstars/simpleVK-php/tree/testing) 
+[Документация SimpleVK 2 (не актуальна)](https://simplevk.scripthub.ru/v2/guide/guide.html) | [Документация SimpleVK 3](https://simplevk.scripthub.ru/) | 
 --- |  --- |  
 
 [Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) | [Telegram](https://t.me/vk_api_chat) | [Discord](https://discord.gg/RFqAWRj)
