@@ -11,7 +11,7 @@
 </p> 
 
 # SimpleVK 2
-> Версия SimpleVK 2 устарела и больше не поддерживается. Переходите на [SimpleVK 3](https://github.com/digitalstars/simpleVK-php/tree/testing) 
+> Версия SimpleVK 2 устарела и больше не поддерживается. Переходите на [SimpleVK 3](https://github.com/digitalstars/simpleVK-php/tree/testing)  
 [Документация SimpleVK 2 (не актуальна)](https://simplevk.scripthub.ru/v2/guide/guide.html) | [Документация SimpleVK 3](https://simplevk.scripthub.ru/) | 
 --- |  --- |  
 
