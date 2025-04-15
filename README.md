@@ -17,7 +17,7 @@
 --- |  --- |  
 
 [Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) | 
---- | --- | --- |
+--- | 
 ### Оглавление
 - [Обзор SimpleVK](#SimpleVK)
 - [Подключение](#Подключение)
