@@ -16,11 +16,8 @@
 [Документация SimpleVK 2 (не актуальна)](https://simplevk.scripthub.ru/v2/guide/guide.html) | [Документация SimpleVK 3](https://simplevk.scripthub.ru/) | 
 --- |  --- |  
 
-[Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) | [Telegram](https://t.me/vk_api_chat) | [Discord](https://discord.gg/RFqAWRj)
+[Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) | 
 --- | --- | --- |
-
-[Блог со статьями](https://scripthub.ru) | [Разработка ботов на заказ](https://vk.me/scripthub)
---- | --- |
 ### Оглавление
 - [Обзор SimpleVK](#SimpleVK)
 - [Подключение](#Подключение)
