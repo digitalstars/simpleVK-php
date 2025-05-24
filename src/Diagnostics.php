@@ -63,9 +63,14 @@ class Diagnostics {
 
     public static function php_iniPatch() {
         $ini_file = php_ini_loaded_file();
-        self::$final_text .= $ini_file
-            ? self::formatText("Расположение файла конфигурации: {$ini_file}.", 'yellow')
-            : self::formatText('Не удалось определить расположение php.ini.', 'yellow');
+        if($ini_file) {
+            self::$final_text .= self::formatText("Расположение файла конфигурации: {$ini_file}.", 'yellow');
+            if(!str_ends_with($ini_file, '.ini')) {
+                self::$final_text .= self::formatText("WARNING: Файл конфигурации не заканчивается на .ini . Возможно, у вас неправильно настроен интерпритатор в IDE или проблема в параметрах запуска", 'red');
+            }
+        } else {
+            self::$final_text = self::formatText('Не удалось определить расположение php.ini.', 'yellow');
+        }
     }
 
     private static function addSystemInfo() {
@@ -239,17 +244,19 @@ class Diagnostics {
     }
 
     private static function testFileOperations() {
-        $testDir = __DIR__ . '/test_simplevk357475';
-        @rmdir($testDir);
+        $baseDir = __DIR__;
+        $uniqueSuffix = uniqid('test_simplevk_', true);
+        $testDir = $baseDir . DIRECTORY_SEPARATOR . $uniqueSuffix;
 
-        if (!mkdir($testDir) && !is_dir($testDir)) {
+        if (!mkdir($testDir, 0755, true) && !is_dir($testDir)) {
             self::$final_text .= self::formatText("Не удалось создать папку $testDir", 'red');
             return;
         }
 
         self::$final_text .= self::formatText("Создание папок: разрешено", 'green');
 
-        $testFile = "$testDir/test.txt";
+        $testFile = $testDir . DIRECTORY_SEPARATOR . 'test.txt';
+
         if (!@file_put_contents($testFile, '123')) {
             self::$final_text .= self::formatText("Не удалось создать файл $testFile", 'red');
             return;
@@ -257,7 +264,8 @@ class Diagnostics {
 
         self::$final_text .= self::formatText("Создание файлов: разрешено", 'green');
 
-        if (!@file_get_contents($testFile)) {
+        $content = @file_get_contents($testFile);
+        if ($content === false) {
             self::$final_text .= self::formatText("Чтение файлов: запрещено", 'red');
         } else {
             self::$final_text .= self::formatText("Чтение файлов: разрешено", 'green');
@@ -368,17 +376,16 @@ class Diagnostics {
     }
 
     private static function getCpuInfo() {
-        // Определяем операционную систему
         $os = PHP_OS_FAMILY;
-        // Инициализируем переменные для хранения данных
         $cpuName = '';
         $cpuCores = 0;
         $cpuLoad = 0;
+        $cpuFreq = '';
+        $stealPercent = null;
         $return_text = '';
 
         if (self::isWindows()) {
-            // Команда для получения информации о процессоре в Windows
-            $cpuInfoCommand = 'powershell -command "Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, LoadPercentage"';
+            $cpuInfoCommand = 'powershell -command "Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, LoadPercentage, MaxClockSpeed"';
             $output = shell_exec($cpuInfoCommand);
 
             if (!empty($output)) {
@@ -388,39 +395,57 @@ class Diagnostics {
                     $cpuName = $data[0];
                     $cpuCores = $data[1];
                     $cpuLoad = $data[2] ?? 'N/A';
+                    $cpuFreq = isset($data[3]) ? $data[3] . ' MHz' : '';
                 }
                 $return_text .= self::formatText("Процессор: $cpuName", 'green');
-                $return_text .= self::formatText("Количество ядер: $cpuCores", 'green');
+                $return_text .= self::formatText("Количество ядер: $cpuCores" . ($cpuFreq ? " ({$cpuFreq})" : ""), 'green');
                 $return_text .= self::formatText("Загруженность процессора: $cpuLoad%", 'green');
             } else {
                 $return_text .= self::formatText("Не удалось получить информацию о процессоре", 'yellow');
             }
         } elseif ($os === 'Linux') {
-            // Получаем имя процессора из /proc/cpuinfo
-            $cpuName = shell_exec("grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f2");
-            $cpuName = trim($cpuName);
+            // Имя процессора
+            $cpuName = trim(shell_exec("grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f2"));
 
-            // Получаем количество ядер
-            $cpuCores = (int) shell_exec("nproc");
+            // Количество ядер
+            $cpuCores = (int)shell_exec("nproc");
 
-            // Получаем среднюю загрузку за последние 5 минут из /proc/loadavg
+            // Частота ядра (по первому ядру)
+            $cpuFreqRaw = shell_exec("lscpu | grep 'CPU MHz' | awk '{print \$3}'");
+            $cpuFreq = $cpuFreqRaw ? round((float)$cpuFreqRaw) . ' MHz' : '';
+
+            // Средняя нагрузка
             $loadAvg = file_get_contents('/proc/loadavg');
             $loadAvgValues = explode(' ', $loadAvg);
-            $cpuLoad = round((float)$loadAvgValues[1], 2); // Вторая колонка - это средняя загрузка за 5 минут
-            if($cpuName) {
-                $return_text .= self::formatText("Процессор: $cpuName", 'green');
-            } else {
-                $return_text .= self::formatText("Не удалось получить информацию о названии процессора", 'yellow');
+            $cpuLoad = round((float)$loadAvgValues[1], 2); // за 5 минут
+
+            // Steal Time
+            $stat = file_get_contents('/proc/stat');
+            preg_match('/^cpu\s+(.+)$/m', $stat, $matches);
+            if (!empty($matches[1])) {
+                $fields = preg_split('/\s+/', trim($matches[1]));
+                $stealTicks = isset($fields[7]) ? (int)$fields[7] : 0;
+                $totalTicks = array_sum(array_slice($fields, 0, 10));
+                if ($totalTicks > 0) {
+                    $stealPercent = round(($stealTicks / $totalTicks) * 100, 2);
+                }
             }
-            if($cpuCores) {
-                $return_text .= self::formatText("Количество ядер: $cpuCores", 'green');
+
+            $return_text .= $cpuName ? self::formatText("Процессор: $cpuName", 'green') : self::formatText("Не удалось получить информацию о названии процессора", 'yellow');
+            $return_text .= $cpuCores ? self::formatText("Количество ядер: $cpuCores" . ($cpuFreq ? " ({$cpuFreq})" : ""), 'green') : self::formatText("Не удалось получить информацию о количестве ядер", 'yellow');
+            $return_text .= self::formatText("Средняя нагрузка за 5 минут: $cpuLoad%", 'green');
+            if ($stealPercent !== null) {
+                $stealPercentText = "Steal Time: $stealPercent%";
+                if ($stealPercent > 0 && $stealPercent <= 2) {
+                    $return_text .= self::formatText($stealPercentText, 'green');
+                } elseif ($stealPercent > 2 & $stealPercent < 10) {
+                    $return_text .= self::formatText($stealPercentText, 'yellow');
+                } elseif ($stealPercent > 10) {
+                    $return_text .= self::formatText($stealPercentText, 'red');
+                }
+
             } else {
-                $return_text .= self::formatText("Не удалось получить информацию о количестве ядер", 'yellow');
-            }
-            if($cpuLoad) {
-                $return_text .= self::formatText("Средняя нагрузка за 5 минут: $cpuLoad%", 'green');
-            } else {
-                $return_text .= self::formatText("Не удалось получить информацию загруженности процессора", 'yellow');
+                $return_text .= self::formatText("Не удалось получить Steal Time", 'yellow');
             }
         } else {
             $return_text .= self::formatText("Не удалось получить информацию о процессоре", 'yellow');
@@ -428,6 +453,7 @@ class Diagnostics {
 
         return $return_text;
     }
+
 
     public static function finish() {
         if (PHP_SAPI !== 'cli') {
