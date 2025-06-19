@@ -10,11 +10,21 @@
 <img src="https://poser.pugx.org/laravel/framework/license.svg" alt="License">
 </p> 
 
-# SimpleVK
+⚠️ Версия simplevk 2 устарела и больше не поддерживается  
+Данная ветка содержит версию библиотеки SimpleVK v2, которая больше не поддерживается и не развивается.  
+Документация по этой версии была потеряна, осталось только то, что на этой странице.  
+
+⚠️Теперь команда `composer require digitalstars/simplevk` будет устанавливать 3-ю версию!  
+Если вам все еще нужна вторая версия, то теперь она устанавливается так:
+`composer require digitalstars/simplevk:^2.0`
+
+Актуальная версия библиотеки — SimpleVK v3, находится в ветке master.
+
+# SimpleVK 3
 [Документация на русском](https://simplevk.scripthub.ru)
 --- |  
 
-[Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) | [Telegram](https://t.me/vk_api_chat) | [Discord](https://discord.gg/RFqAWRj)
+[Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) |
 --- | --- | --- |
 
 [Блог со статьями](https://scripthub.ru) | [Разработка ботов на заказ](https://vk.me/scripthub)
