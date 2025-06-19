@@ -20,7 +20,7 @@
 >
 > Если нужна версия 2, то команда теперь такая:
 > ```bash
-> composer require digitalstars/simplevk:^2.0
+> composer require digitalstars/simplevk:~2.0
 > ```
 
 Актуальная версия библиотеки — SimpleVK v3, находится в ветке master.
