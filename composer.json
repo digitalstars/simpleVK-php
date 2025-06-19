@@ -5,14 +5,15 @@
     "minimum-stability": "beta",
     "prefer-stable": true,
     "require": {
-        "php": ">=8.0",
+        "php": ">=8.2",
         "ext-curl": "*",
         "ext-json": "*",
         "ext-mbstring": "*"
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest",
-        "ext-openssl": "*"
+        "ext-openssl": "*",
+        "vimeo/psalm": "^7.0.0-beta6"
     },
     "suggest": {
         "ext-redis": "Используется для обнаружения дублирующихся событий от VK API и их игнорирования",
@@ -27,5 +28,8 @@
         "psr-4": {
             "DigitalStars\\SimpleVK\\": "src/"
         }
+    },
+    "scripts": {
+        "psalm": "vendor/bin/psalm --config=psalm.xml"
     }
 }
