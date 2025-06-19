@@ -52,7 +52,7 @@ SimpleVK - это фреймворк для создания ботов. Вам 
 ### Используя composer
 1\. Установить
 ```bash
-composer require digitalstars/simplevk:^3
+composer require digitalstars/simplevk:~3.0
 ```
 
 2\. Подключить `autoload.php`
