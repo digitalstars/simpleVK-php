@@ -2,6 +2,9 @@
 
 namespace DigitalStars\SimpleVK;
 
+use DigitalStars\SimpleVK\Attributes\AsButton;
+use DigitalStars\SimpleVK\EventDispatcher\BaseButton;
+
 class Message extends BaseConstructor {
     use FileUploader;
 
@@ -128,6 +131,61 @@ class Message extends BaseConstructor {
         $keyboard = [];
         foreach ($keyboard_raw as $row => $button_str) {
             foreach ($button_str as $col => $button) {
+
+                if ($button instanceof BaseButton) {
+
+                    $reflection = new \ReflectionClass($button);
+                    $asButtonAttr = $reflection->getAttributes(AsButton::class)[0] ?? null;
+
+                    // Если у класса нет атрибута #[AsButton], а он нужен для UI, пропускаем его.
+                    // Это защита от случайной передачи, например, BaseCommand в клавиатуру.
+                    if (!$asButtonAttr && !$button->getLabel()) {
+                        continue;
+                    }
+
+                    // 1. Определяем UI-параметры (приоритет у динамических свойств)
+                    if ($asButtonAttr) {
+                        $btnUI = $asButtonAttr->newInstance();
+                        $label = $button->getLabel() ?? $btnUI->label;
+                        $color = $button->getColor() ?? $btnUI->color;
+                        $type  = $button->getType()  ?? $btnUI->type;
+                        $actionName = $btnUI->payload ?? $reflection->getShortName();
+                    } else {
+                        // Если атрибута нет, все параметры должны быть заданы динамически
+                        $label = $button->getLabel();
+                        $color = $button->getColor();
+                        $type  = $button->getType();
+                        $actionName = $reflection->getShortName();
+                    }
+
+                    // Если после всех проверок нет текста на кнопке, она невалидна
+                    if (!$label) continue;
+
+                    // 2. Собираем payload
+                    $finalPayload = $button->getPayload(); // Берем кастомный payload из Action
+                    $finalPayload['action'] = $actionName; // Добавляем наш action_id
+
+                    // 3. Собираем кнопку в формате, понятном VK API
+                    $vkButton = [
+                        'action' => [
+                            'type'    => $type,
+                            'payload' => $finalPayload ? json_encode($finalPayload, JSON_UNESCAPED_UNICODE) : null,
+                            'label'   => $label,
+                        ],
+                        'color' => SimpleVK::$color_replacer[$color] ?? $color
+                    ];
+
+                    // 4. Очищаем от null-значений, чтобы не отправлять их в API
+                    $vkButton['action'] = array_filter(
+                        $vkButton['action'],
+                        static fn($value) => !is_null($value)
+                    );
+
+                    $keyboard[$row][$col] = $vkButton;
+
+                    continue; // Переходим к следующей кнопке
+                }
+
                 $keyboard[$row][$col]['action']['type'] = $button[0];
                 if ($button[1] != null)
                     $keyboard[$row][$col]['action']['payload'] = json_encode($button[1], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
