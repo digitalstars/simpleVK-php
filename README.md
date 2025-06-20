@@ -25,15 +25,9 @@
 
 Актуальная версия библиотеки — SimpleVK v3, находится в ветке master.
 
-# SimpleVK 3
-[Документация на русском](https://simplevk.scripthub.ru)
---- |  
-
 [Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) |
 --- | --- | --- |
 
-[Блог со статьями](https://scripthub.ru) | [Разработка ботов на заказ](https://vk.me/scripthub)
---- | --- |
 ### Оглавление
 - [Обзор SimpleVK](#SimpleVK)
 - [Подключение](#Подключение)
