@@ -26,7 +26,7 @@
 Актуальная версия библиотеки — SimpleVK v3, находится в ветке master.
 
 [Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) |
---- | --- | --- |
+--- |  
 
 ### Оглавление
 - [Обзор SimpleVK](#SimpleVK)
