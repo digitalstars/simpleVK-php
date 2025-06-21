@@ -36,7 +36,10 @@ class Message extends BaseConstructor {
 
     public function kbd($kbd = [], $inline = false, $one_time = False) {
         $is_invalid_kbd = is_string($kbd);
-        if (isset($kbd[0]) and is_string($kbd[0]))
+        if (is_object($kbd)) {
+            $kbd = [[$kbd]];
+        }
+        else if (isset($kbd[0]) and is_string($kbd[0]))
             $kbd = [[$kbd]];
         else if (!$is_invalid_kbd)
             foreach ($kbd as $row)
