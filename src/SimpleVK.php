@@ -44,11 +44,35 @@ class SimpleVK {
                 }
             }
             if (PHP_OS === 'WINNT') {
-                $path = __DIR__."/../bin/convert_to_html_entities.dll";
-                self::$ffi = \FFI::cdef(
-                    "char* convert_to_html_entities(const char* input);
-                    void free_converted_string(char* result);", $path
-                );
+                $library_path = dirname(__DIR__) . '/bin/convert_to_html_entities.dll';
+
+                // Проверяем, содержит ли путь что-то кроме базовых ASCII символов
+                if (!str_contains($library_path, '~') && preg_match('/[^\x20-\x7E]/', $library_path)) {
+                    // Пытаемся получить короткое 8.3 имя через команду cmd
+                    // Это трюк, который работает, если exec() разрешен и 8.3 имена включены в системе
+                    $command = 'for %I in ("' . $library_path . '") do @echo %~sI';
+                    $short_path = exec($command);
+
+                    if ($short_path && file_exists($short_path)) {
+                        $library_path = $short_path;
+                    }
+                }
+
+                if ($library_path && file_exists($library_path)) {
+                    try {
+                        self::$ffi = \FFI::cdef(
+                            "char* convert_to_html_entities(const char* input);
+                void free_converted_string(char* result);", $library_path
+                        );
+                    } catch (\FFI\Exception $e) {
+                        $message = "FFI доступен, но не удалось загрузить библиотеку 'convert_to_html_entities.dll'.\n";
+                        $message .= "Возможно в пути есть кириллица или пробелы. Путь к библиотеке:\n";
+                        $message .= "{$library_path}\n";
+
+                        trigger_error($message, E_USER_WARNING);
+                        self::$ffi = null;
+                    }
+                }
             } elseif (PHP_OS === 'Linux') {
                 $path = __DIR__."/../bin/libconvert_to_html_entities.so";
                 self::$ffi = \FFI::cdef(
