@@ -2,6 +2,8 @@
 
 namespace DigitalStars\SimpleVK;
 
+use DigitalStars\SimpleVK\Utils\EnvironmentDetector;
+
 require_once 'config_simplevk.php';
 
 class Diagnostics {
@@ -9,7 +11,7 @@ class Diagnostics {
 
     public static function run() {
         self::initialize();
-        self::webServerOrCli();
+        self::$final_text .= self::getEnvironmentInfoString();
         self::php_iniPatch();
         self::addSystemInfo();
         self::checkCurl();
@@ -20,7 +22,7 @@ class Diagnostics {
     }
 
     private static function initialize() {
-        if (PHP_SAPI !== 'cli') {
+        if (EnvironmentDetector::isWeb()) {
             if(isset($_GET['type'])) {
                 switch ($_GET['type']) {
                     case 'check_send_ok':
@@ -145,7 +147,7 @@ class Diagnostics {
             $separator = self::EOL();
         }
 
-        if (PHP_SAPI === 'cli') {
+        if(EnvironmentDetector::isInteractiveCli()) {
             $colors = [
                 'red' => "\033[0;31m",
                 'green' => "\033[0;32m",
@@ -456,7 +458,7 @@ class Diagnostics {
 
 
     public static function finish() {
-        if (PHP_SAPI !== 'cli') {
+        if (EnvironmentDetector::isWeb()) {
             self::$final_text .= self::EOL().self::formatText("Проверка работы веб-сервера", 'cyan', need_dot: false);
             self::$final_text .= self::addNetworkChecks();
             self::$final_text .= self::EOL() . self::formatText("Не забудьте удалить этот скрипт после проверки!", 'yellow', need_dot: false);
@@ -495,7 +497,7 @@ HTML;
     }
 
     public static function EOL() {
-        if (PHP_SAPI != 'cli') {
+        if (EnvironmentDetector::isWeb()) {
             return '<br>';
         }
 
