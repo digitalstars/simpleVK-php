@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-<img src="https://img.shields.io/badge/PHP-8.2 -- 8.4-8992bb.svg" alt="php version">
+<img src="https://img.shields.io/badge/PHP-8.0 -- 8.4-8992bb.svg" alt="php version">
 <img src="https://img.shields.io/badge/VK_API-%205.139+-8992bb.svg" alt="VK api version">
 <img src="https://img.shields.io/github/v/release/digitalstars/simplevk?color=8992bb" alt="Last release">
 <img src="https://img.shields.io/packagist/l/digitalstars/simplevk" alt="License">
