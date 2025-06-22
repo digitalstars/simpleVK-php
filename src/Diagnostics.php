@@ -48,7 +48,7 @@ class Diagnostics {
         }
 
         print self::formatText('Диагностика системы для работы с SimpleVK ' . SIMPLEVK_VERSION . " $new_version_str", 'cyan', need_dot: false)
-            . self::formatText('Проверяем пинг до api.vk.com...', 'cyan', need_dot: false);
+            . self::formatText('Проверяем пинг до api.vk.com и steal time...', 'cyan', need_dot: false);
         self::$final_text .= self::formatText('Информация о системе', 'cyan', need_dot: false);
 
     }
@@ -395,6 +395,7 @@ class Diagnostics {
         $cpuLoad = 0;
         $cpuFreq = '';
         $stealPercent = null;
+        $stealRecent = null;
         $return_text = '';
 
         if (self::isWindows()) {
@@ -417,22 +418,15 @@ class Diagnostics {
                 $return_text .= self::formatText("Не удалось получить информацию о процессоре", 'yellow');
             }
         } elseif ($os === 'Linux') {
-            // Имя процессора
             $cpuName = trim(shell_exec("grep 'model name' /proc/cpuinfo | head -1 | cut -d ':' -f2"));
-
-            // Количество ядер
             $cpuCores = (int)shell_exec("nproc");
-
-            // Частота ядра (по первому ядру)
             $cpuFreqRaw = shell_exec("lscpu | grep 'CPU MHz' | awk '{print \$3}'");
             $cpuFreq = $cpuFreqRaw ? round((float)$cpuFreqRaw) . ' MHz' : '';
-
-            // Средняя нагрузка
             $loadAvg = file_get_contents('/proc/loadavg');
             $loadAvgValues = explode(' ', $loadAvg);
-            $cpuLoad = round((float)$loadAvgValues[1], 2); // за 5 минут
+            $cpuLoad = round((float)$loadAvgValues[1], 2);
 
-            // Steal Time
+            // STEAL TIME (TOTAL)
             $stat = file_get_contents('/proc/stat');
             preg_match('/^cpu\s+(.+)$/m', $stat, $matches);
             if (!empty($matches[1])) {
@@ -444,21 +438,51 @@ class Diagnostics {
                 }
             }
 
+            // STEAL TIME (5 SEC INTERVAL)
+            $first = self::getStatSnapshot();
+            sleep(5);
+            $second = self::getStatSnapshot();
+
+            if ($first && $second) {
+                $deltaTotal = $second['total'] - $first['total'];
+                $deltaSteal = $second['steal'] - $first['steal'];
+                if ($deltaTotal > 0) {
+                    $stealRecent = round(($deltaSteal / $deltaTotal) * 100, 2);
+                }
+            }
+
             $return_text .= $cpuName ? self::formatText("Процессор: $cpuName", 'green') : self::formatText("Не удалось получить информацию о названии процессора", 'yellow');
             $return_text .= $cpuCores ? self::formatText("Количество ядер: $cpuCores" . ($cpuFreq ? " ({$cpuFreq})" : ""), 'green') : self::formatText("Не удалось получить информацию о количестве ядер", 'yellow');
             $return_text .= self::formatText("Средняя нагрузка за 5 минут: $cpuLoad%", 'green');
-            if ($stealPercent !== null) {
-                $stealPercentText = "Steal Time: $stealPercent%";
-                if ($stealPercent > 0 && $stealPercent <= 2) {
-                    $return_text .= self::formatText($stealPercentText, 'green');
-                } elseif ($stealPercent > 2 & $stealPercent < 10) {
-                    $return_text .= self::formatText($stealPercentText, 'yellow');
-                } elseif ($stealPercent > 10) {
-                    $return_text .= self::formatText($stealPercentText, 'red');
-                }
 
+            // Общий steal time
+            if ($stealPercent !== null) {
+                $stealText = "Steal Time (с момента запуска): $stealPercent%";
+
+                if ($stealPercent <= 2) {
+                    $return_text .= self::formatText($stealText, 'green');
+                } elseif ($stealPercent <= 10) {
+                    $return_text .= self::formatText($stealText, 'yellow');
+                } else {
+                    $return_text .= self::formatText($stealText, 'red');
+                }
             } else {
-                $return_text .= self::formatText("Не удалось получить Steal Time", 'yellow');
+                $return_text .= self::formatText("Не удалось получить Steal Time (с момента запуска)", 'yellow');
+            }
+
+            // Steal time за последние 5 секунд
+            if ($stealRecent !== null) {
+                $stealText = "Steal Time (5c.): $stealRecent%";
+
+                if ($stealRecent <= 2) {
+                    $return_text .= self::formatText($stealText, 'green');
+                } elseif ($stealRecent <= 10) {
+                    $return_text .= self::formatText($stealText, 'yellow');
+                } else {
+                    $return_text .= self::formatText($stealText, 'red');
+                }
+            } else {
+                $return_text .= self::formatText("Не удалось получить Steal Time (5с.)", 'yellow');
             }
         } else {
             $return_text .= self::formatText("Не удалось получить информацию о процессоре", 'yellow');
@@ -466,6 +490,21 @@ class Diagnostics {
 
         return $return_text;
     }
+
+    private static function getStatSnapshot(): ?array {
+        $stat = @file_get_contents('/proc/stat');
+        if (!$stat) return null;
+
+        preg_match('/^cpu\s+(.+)$/m', $stat, $matches);
+        if (!isset($matches[1])) return null;
+
+        $fields = preg_split('/\s+/', trim($matches[1]));
+        $steal = isset($fields[7]) ? (int)$fields[7] : 0;
+        $total = array_sum(array_slice($fields, 0, 10));
+
+        return ['steal' => $steal, 'total' => $total];
+    }
+
 
 
     public static function finish() {
