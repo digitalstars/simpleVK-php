@@ -9,7 +9,7 @@ if (PHP_VERSION_ID < 80200) {
     print Diagnostics::formatText('SimpleVK3 требует PHP версии 8.2.0 или выше. Вы используете версию ' . PHP_VERSION, 'red', need_dot: false);
     Diagnostics::php_iniPatch();
     print Diagnostics::$final_text.Diagnostics::EOL();
-    exit();
+    exit(1);
 }
 
 $required_extensions = ['curl', 'mbstring', 'json']; // Список обязательных модулей
@@ -23,6 +23,6 @@ foreach ($required_extensions as $ext) {
         Diagnostics::php_iniPatch();
         Diagnostics::checkModules();
         print Diagnostics::$final_text.Diagnostics::EOL();
-        exit();
+        exit(1);
     }
 }
