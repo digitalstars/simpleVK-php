@@ -3,6 +3,7 @@
 namespace DigitalStars\SimpleVK;
 
 use DigitalStars\SimpleVK\Internal\UniqueEventHandler;
+use DigitalStars\SimpleVK\Utils\EnvironmentDetector;
 
 class LongPoll extends SimpleVK {
     use ErrorHandler;
@@ -17,7 +18,7 @@ class LongPoll extends SimpleVK {
     public static $use_user_long_poll = 0;
 
     public function __construct($token, $version, $also_version = null, $data = null) {
-        if (php_sapi_name() !== "cli" && self::$longpoll_in_web == false)
+        if (EnvironmentDetector::isWeb() && self::$longpoll_in_web == false)
             die("Запуск longpoll возможен только в cli. Используйте LongPoll::enableInWeb() чтобы убрать это ограничение.");
         $this->multiThread();
         $this->processAuth($token, $version, $also_version);
