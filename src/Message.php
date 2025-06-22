@@ -34,7 +34,7 @@ class Message extends BaseConstructor {
         return $this;
     }
 
-    public function kbd($kbd = [], $inline = false, $one_time = False) {
+    public function kbd(array|string|object $kbd = [], int|bool $inline = false, bool $one_time = false) {
         $is_invalid_kbd = is_string($kbd);
         if (is_object($kbd)) {
             $kbd = [[$kbd]];
