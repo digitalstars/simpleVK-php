@@ -53,15 +53,26 @@ class Diagnostics {
 
     }
 
-    private static function webServerOrCli() {
-        if (PHP_SAPI == 'cli') {
-            self::$final_text .= self::formatText('Запущен через: командная строка (CLI)', 'green');
-        } else if (isset($_SERVER['DOCUMENT_ROOT'], $_SERVER['REQUEST_URI'])) {
-            self::$final_text .= self::formatText('Запущен через: ' . PHP_SAPI, 'green');
-        } else {
-            self::$final_text .= self::formatText("Запущен через: Веб-сервер, но DOCUMENT_ROOT и REQUEST_URI не удалось получить", 'red');
+        private static function getEnvironmentInfoString(): string {
+            switch (EnvironmentDetector::getEnvironment()) {
+                case EnvironmentDetector::ENV_WEB:
+                    $sapi = PHP_SAPI;
+                    $serverSoftware = isset($_SERVER['SERVER_SOFTWARE']) ? ' - ' . $_SERVER['SERVER_SOFTWARE'] : '';
+                    $message = sprintf('Запущен через: Веб-сервер (SAPI: %s%s)', $sapi, $serverSoftware);
+                    return self::formatText($message, 'green');
+
+                case EnvironmentDetector::ENV_CLI_INTERACTIVE:
+                    $user = get_current_user();
+                    $message = sprintf('Запущен через: Интерактивная командная строка (CLI) от пользователя "%s"', $user);
+                    return self::formatText($message, 'green');
+
+                case EnvironmentDetector::ENV_CLI_NON_INTERACTIVE:
+                    $message = 'Запущен через: Неинтерактивная командная строка (вероятно, cron или демон)';
+                    return self::formatText($message, 'yellow');
+            }
+
+            return self::formatText('Не удалось определить среду выполнения.', 'red');
         }
-    }
 
     public static function php_iniPatch() {
         $ini_file = php_ini_loaded_file();
