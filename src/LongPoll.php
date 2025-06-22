@@ -57,12 +57,9 @@ class LongPoll extends SimpleVK {
     public function listen($anon) {
         while ($data = $this->processingData()) {
             foreach ($data['updates'] as $event) {
-
-                if(isset($event['event_id'])) {
-                    $is_dublicated = UniqueEventHandler::addEventToCache($event['event_id']);
-                    if($is_dublicated) {
-                        continue;
-                    }
+                $is_dublicated = UniqueEventHandler::addEventToCache($event);
+                if($is_dublicated) {
+                    continue;
                 }
 
                 if ($this->is_multi_thread) {

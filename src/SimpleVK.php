@@ -103,11 +103,9 @@ class SimpleVK {
                 self::$debug_mode = true;
             }
 
-            if(isset($this->data['event_id'])) {
-                $is_dublicated = UniqueEventHandler::addEventToCache($this->data['event_id']);
-                if($is_dublicated) {
-                    exit();
-                }
+            $is_dublicated = UniqueEventHandler::addEventToCache($this->data);
+            if($is_dublicated) {
+                exit();
             }
 
             if (isset($this->data['object']['message']) && $this->data['type'] == 'message_new') {

@@ -41,15 +41,22 @@ class UniqueEventHandler {
     /**
      * Добавляет событие в кэш
      *
-     * @param string $event_id
+     * @param array $event
      * @return bool True, если событие уже было обработано, иначе False
      */
-    public static function addEventToCache(string $event_id): bool {
+    public static function addEventToCache(array $event): bool {
         if (!self::$is_enabled || self::$cache === null) {
             return false;
         }
 
-        $key = "svk_event_$event_id";
+        $peer_id = $event['object']['message']['peer_id'] ?? null;
+        $cmid = $event['object']['message']['conversation_message_id'] ?? null;
+
+        if ($peer_id === null || $cmid === null) {
+            return false;
+        }
+
+        $key = "svk_event_{$peer_id}_{$cmid}";
 
         if (self::$cache->has($key)) {
             return true; // дубликат
@@ -66,10 +73,10 @@ class UniqueEventHandler {
                 $redis->connect($redis_host, $redis_port);
                 return new RedisCache($redis);
             } catch (Exception $exception) {
-                trigger_error("Redis недоступен: " . $exception->getMessage(), E_USER_ERROR);
+                throw new \RuntimeException("Redis недоступен: " . $exception->getMessage(), $exception->getCode(), $exception);
             }
         } else {
-            trigger_error("ext-redis не установлен или не включен в php.ini", E_USER_ERROR);
+            throw new \LogicException("Расширение ext-redis не установлено или не включено в php.ini");
         }
     }
 }
