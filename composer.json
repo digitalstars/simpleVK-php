@@ -1,6 +1,6 @@
 {
     "name": "digitalstars/simplevk",
-    "description": "Library for easy work with VK com api",
+    "description": "Framework for creating VK.com bots and working with VK API",
     "license": "MIT",
     "minimum-stability": "beta",
     "prefer-stable": true,
@@ -16,10 +16,10 @@
         "vimeo/psalm": "^7.0.0-beta6"
     },
     "suggest": {
-        "ext-redis": "Используется для обнаружения дублирующихся событий от VK API и их игнорирования",
+        "ext-redis": "Для обнаружения дублирующихся событий от VK API и их игнорирования",
         "ext-pcntl": "Автоматическая многопоточная обработка событий через Longpoll",
         "ext-posix": "Автоматическая многопоточная обработка событий через Longpoll",
-        "ext-ffi": "Используется в модуле на С для ускорения проверки и разбивки отправляемых сообщений"
+        "ext-ffi": "Для ускорения проверки длинны сообщений и разбивки отправляемых сообщений"
     },
     "autoload": {
         "files": [
