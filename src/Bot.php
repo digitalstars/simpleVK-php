@@ -501,10 +501,11 @@ class MessageBot extends Message {
         return $this;
     }
 
-    public function kbd($kbd = [], $inline = false, $one_time = False) {
-        if (is_string($kbd) or (isset($kbd[0]) and is_string($kbd[0])))
+    public function kbd(array|string|object $kbd = [], int|bool $inline = false, bool $one_time = false): self {
+        if (is_string($kbd) || (isset($kbd[0]) && is_string($kbd[0]))) {
             $kbd = [[$kbd]];
-        $this->config['kbd'] = ['kbd' => $kbd, 'inline' => $inline, 'one_time' => $one_time];
+        }
+        $this->config['kbd'] = ['kbd' => $kbd, 'inline' => (bool)$inline, 'one_time' => $one_time];
         return $this;
     }
 
