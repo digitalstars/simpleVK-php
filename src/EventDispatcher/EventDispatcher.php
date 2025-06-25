@@ -20,6 +20,8 @@ class EventDispatcher
     private ?string $fallbackAction = null;
     private bool $isRoutesLoaded = false;
     private array $actionPaths = [];
+    private ?\Closure $factory;
+    private ArgumentResolver $argumentResolver;
 
     public function __construct(SimpleVK $vk, array $config = [])
     {
@@ -28,6 +30,8 @@ class EventDispatcher
         if (isset($config['actions_paths'])) {
             $this->registerActionPaths($config['actions_paths']);
         }
+        $this->factory = $config['factory'] ?? null;
+        $this->argumentResolver = new ArgumentResolver($config['cache'] ?? null);
     }
 
     public function registerActionPaths(array $paths): self
@@ -84,38 +88,49 @@ class EventDispatcher
         }
     }
 
-    private function executeAction(string $actionClass, int $userId, int $peerId, array $args, array $rawEvent): void
+    public function executeAction(string $actionClass, int $userId, int $peerId, array $args, array $rawEvent): void
     {
-        $store = Store::load($userId);
-        $this->vk->initText($text)->initPayload($payload);
+        $this->vk->initText($text);
+        $context = new Context($this->vk, $this, (object)$rawEvent, $userId, $peerId, $this->argumentResolver, $text, $this->factory);
 
-        $context = new Context($this->vk, $this, $store, (object)$rawEvent, $userId, $peerId, $text, $payload);
-        $instance = new $actionClass();
+        $reflectionClass = new \ReflectionClass($actionClass);
+        $instance = null;
 
-        $instance->setContext($context);
-
-        if (!$instance->before($context)) {
-            return;
-        }
-
-        $reflectionMethod = new ReflectionMethod($instance, 'handle');
-        $finalArgs = [];
-        $handleParams = $reflectionMethod->getParameters();
-
-        array_shift($handleParams);
-
-        foreach ($handleParams as $param) {
-            $paramName = $param->getName();
-            if (isset($args[$paramName])) {
-                $finalArgs[] = $args[$paramName];
-            } elseif (isset($args[0])) {
-                $finalArgs[] = array_shift($args);
-            } else {
-                $finalArgs[] = $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null;
+        // ИСПРАВЛЕНО: Логика создания Action теперь такая же, как для View
+        if (is_callable($this->factory)) {
+            try {
+                $instance = ($this->factory)($actionClass);
+            } catch (\Throwable) {
+                $instance = null;
             }
         }
 
-        $instance->handle($context, ...$finalArgs);
+        if (!$instance) {
+            $constructor = $reflectionClass->getConstructor();
+            if ($constructor) {
+                // Если у Action есть конструктор, мы должны его разрешить!
+                $constructorArgs = $this->argumentResolver->getArguments($constructor, $context);
+                $instance = $reflectionClass->newInstanceArgs($constructorArgs);
+            } else {
+                $instance = new $actionClass();
+            }
+        }
+
+        if (method_exists($instance, 'before')) {
+            $reflectionMethod = $reflectionClass->getMethod('before');
+            $beforeArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $args);
+            if ($instance->before(...$beforeArgs) === false) {
+                return;
+            }
+        }
+
+        if (!method_exists($instance, 'handle')) {
+            throw new \RuntimeException("Класс {$actionClass} должен иметь метод handle()");
+        }
+
+        $reflectionMethod = $reflectionClass->getMethod('handle');
+        $resolvedArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $args);
+        $instance->handle(...$resolvedArgs);
     }
 
     private function loadRoutes(): void

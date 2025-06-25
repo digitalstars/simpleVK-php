@@ -31,7 +31,7 @@ abstract class BaseButton extends BaseAction
         return $this;
     }
 
-    public function payload(array $payload, bool $merge = true): self
+    public function addPayload(array $payload, bool $merge = true): self
     {
         $this->payload = $merge ? array_merge($this->payload, $payload) : $payload;
         return $this;

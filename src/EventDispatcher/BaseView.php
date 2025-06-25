@@ -5,17 +5,5 @@ use DigitalStars\SimpleVK\Message;
 
 abstract class BaseView
 {
-    protected Context $ctx;
-
-    public function setContext(Context $context): void
-    {
-        $this->ctx = $context;
-    }
-
-    abstract public function render(): Message;
-
-    protected function msg(string $text = ''): Message
-    {
-        return $this->ctx->vk->msg($text);
-    }
+    //пока тут нет никаких действий, но в будущем может быть
 }

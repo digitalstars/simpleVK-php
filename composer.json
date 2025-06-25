@@ -8,7 +8,8 @@
         "php": ">=8.2",
         "ext-curl": "*",
         "ext-json": "*",
-        "ext-mbstring": "*"
+        "ext-mbstring": "*",
+        "php-di/php-di": "^7.0"
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest",
