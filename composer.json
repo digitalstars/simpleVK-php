@@ -9,7 +9,9 @@
         "ext-curl": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
-        "php-di/php-di": "^7.0"
+        "php-di/php-di": "^7.0",
+        "psr/simple-cache": "^3.0",
+        "symfony/cache": "^7.3"
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest",
