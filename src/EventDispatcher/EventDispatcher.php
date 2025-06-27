@@ -3,15 +3,16 @@
 namespace DigitalStars\SimpleVK\EventDispatcher;
 
 use DigitalStars\SimpleVK\SimpleVK;
-use DigitalStars\SimpleVK\Store;
 use DigitalStars\SimpleVK\Attributes\{AsButton, Trigger, Fallback};
-use ReflectionClass, ReflectionMethod;
+use LogicException;
+use ReflectionClass;
 use RecursiveIteratorIterator, RecursiveDirectoryIterator;
+use ReflectionException;
 
 class EventDispatcher
 {
     private SimpleVK $vk;
-    private array $config;
+    private DispatcherConfig $config;
     private array $routeMap = [
         'payload' => [],
         'command' => [],
@@ -23,15 +24,15 @@ class EventDispatcher
     private ?\Closure $factory;
     private ArgumentResolver $argumentResolver;
 
-    public function __construct(SimpleVK $vk, array $config = [])
+    public function __construct(SimpleVK $vk, DispatcherConfig $config)
     {
         $this->vk = $vk;
         $this->config = $config;
-        if (isset($config['actions_paths'])) {
-            $this->registerActionPaths($config['actions_paths']);
+        if (isset($config->actionsPaths)) {
+            $this->registerActionPaths($config->actionsPaths);
         }
-        $this->factory = $config['factory'] ?? null;
-        $this->argumentResolver = new ArgumentResolver($config['cache'] ?? null);
+        $this->factory = $config->getFactory();
+        $this->argumentResolver = new ArgumentResolver($config->cache ?? null);
     }
 
     public function registerActionPaths(array $paths): self
@@ -48,77 +49,91 @@ class EventDispatcher
 
         $event = $externalEvent ?? $this->vk->data;
         $this->vk->data = $event;
-        $this->vk->initVars($peerId, $userId, $type, $text, $payload, $messageId, $attachments);
+        $this->vk->initText($text)->initUserID($userId)->initPayload($payload);
 
         if (is_null($userId)) {
             return;
         }
 
-        $matchedAction = null;
-        $actionArgs = [];
+        $route = $this->findRoute($text, $payload);
+        if (!$route) {
+            return;
+        }
 
+        $context = $this->createContextFromEvent($event);
+        $this->runAction($route['actionClass'], $context, $route['actionArgs']);
+    }
+
+    /**
+     * Находит подходящий Action на основе текста и payload.
+     *
+     * @param string|null $text
+     * @param array|null $payload
+     * @return array|null Возвращает массив ['actionClass' => ..., 'actionArgs' => ...] или null, если ничего не найдено.
+     */
+    private function findRoute(?string $text, ?array $payload): ?array
+    {
+        // Приоритет 1: Кнопки (payload)
         if (!empty($payload['action'])) {
             $actionName = $payload['action'];
             if (isset($this->routeMap['payload'][$actionName])) {
-                $matchedAction = $this->routeMap['payload'][$actionName];
-                $actionArgs = array_diff_key($payload, ['action' => '']);
+                return [
+                    'actionClass' => $this->routeMap['payload'][$actionName],
+                    'actionArgs' => array_diff_key($payload, ['action' => ''])
+                ];
             }
         }
 
-        if (!$matchedAction && !empty($text)) {
+        // Приоритет 2: Текстовые команды
+        if (!empty($text)) {
+            // Точное совпадение
             if (isset($this->routeMap['command'][$text])) {
-                $matchedAction = $this->routeMap['command'][$text];
-            } else {
-                foreach ($this->routeMap['regex'] as $pattern => $actionClass) {
-                    if (preg_match($pattern, $text, $matches)) {
-                        $matchedAction = $actionClass;
-                        $actionArgs = array_slice($matches, 1);
-                        break;
-                    }
+                return [
+                    'actionClass' => $this->routeMap['command'][$text],
+                    'actionArgs' => []
+                ];
+            }
+            // Поиск по регулярному выражению
+            foreach ($this->routeMap['regex'] as $pattern => $actionClass) {
+                if (preg_match($pattern, $text, $matches)) {
+                    return [
+                        'actionClass' => $actionClass,
+                        'actionArgs' => array_slice($matches, 1)
+                    ];
                 }
             }
         }
 
-        if (!$matchedAction) {
-            $matchedAction = $this->fallbackAction;
+        // Приоритет 3: Fallback Action
+        if ($this->fallbackAction) {
+            return [
+                'actionClass' => $this->fallbackAction,
+                'actionArgs' => []
+            ];
         }
 
-        if ($matchedAction) {
-            $this->executeAction($matchedAction, $userId, $peerId, $actionArgs, $event);
-        }
+        return null;
     }
 
-    public function executeAction(string $actionClass, int $userId, int $peerId, array $args, array $rawEvent): void
+    public function createContextFromEvent(array $event): Context
     {
-        $this->vk->initText($text);
-        $context = new Context($this->vk, $this, (object)$rawEvent, $userId, $peerId, $this->argumentResolver, $text, $this->factory);
+        $this->vk->data = $event;
+        $this->vk->initText($text)->initUserID($userId)->initPeerID($peerId)->initData($rawEvent);
+//        var_dump($text, $userId, $peerId, $rawEvent);
+        return new Context($this->vk, $this, $this->argumentResolver, (object)$rawEvent, $userId, $peerId, $text, $this->factory);
+    }
 
-        $reflectionClass = new \ReflectionClass($actionClass);
-        $instance = null;
-
-        // ИСПРАВЛЕНО: Логика создания Action теперь такая же, как для View
-        if (is_callable($this->factory)) {
-            try {
-                $instance = ($this->factory)($actionClass);
-            } catch (\Throwable) {
-                $instance = null;
-            }
-        }
-
-        if (!$instance) {
-            $constructor = $reflectionClass->getConstructor();
-            if ($constructor) {
-                // Если у Action есть конструктор, мы должны его разрешить!
-                $constructorArgs = $this->argumentResolver->getArguments($constructor, $context);
-                $instance = $reflectionClass->newInstanceArgs($constructorArgs);
-            } else {
-                $instance = new $actionClass();
-            }
-        }
+    /**
+     * @throws ReflectionException
+     */
+    public function runAction(string $actionClass, Context $context, array $actionArgs = []): void
+    {
+        $instance = $this->createInstance($actionClass, $context);
+        $reflectionClass = new ReflectionClass($actionClass); // нужен для getMethod
 
         if (method_exists($instance, 'before')) {
             $reflectionMethod = $reflectionClass->getMethod('before');
-            $beforeArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $args);
+            $beforeArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $actionArgs);
             if ($instance->before(...$beforeArgs) === false) {
                 return;
             }
@@ -129,8 +144,44 @@ class EventDispatcher
         }
 
         $reflectionMethod = $reflectionClass->getMethod('handle');
-        $resolvedArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $args);
+        $resolvedArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $actionArgs);
         $instance->handle(...$resolvedArgs);
+    }
+
+    /**
+     * Создает экземпляр класса, используя фабрику/DI (через Context) и рефлексию.
+     * Это универсальный метод для создания Action'ов и View'ов.
+     *
+     * @template T
+     * @param class-string<T> $className
+     * @param Context $context
+     * @return T
+     * @throws ReflectionException
+     */
+    public function createInstance(string $className, Context $context): object
+    {
+        $instance = null;
+
+        // Приоритет 1: Попытка создать через пользовательскую фабрику/DI.
+        if (is_callable($this->factory)) {
+            try {
+                $instance = $context->get($className);
+            } catch (\Throwable) {}
+        }
+
+        // Приоритет 2: Ручное создание, если фабрика не справилась или ее нет.
+        if (!$instance) {
+            $reflectionClass = new ReflectionClass($className);
+            $constructor = $reflectionClass->getConstructor();
+            if ($constructor) {
+                // Рантайм-аргументы сюда НЕ передаются.
+                $constructorArgs = $this->argumentResolver->getArguments($constructor, $context);
+                $instance = $reflectionClass->newInstanceArgs($constructorArgs);
+            } else {
+                $instance = $reflectionClass->newInstance();
+            }
+        }
+        return $instance;
     }
 
     private function loadRoutes(): void
@@ -151,8 +202,9 @@ class EventDispatcher
             return;
         }
 
-        $autoloaderRoot = $this->config['autoloader_root'] ?? dirname($realPath);
-        $rootNamespace = $this->config['root_namespace'] ?? '';
+        //todo а нужен ли autoloader_root?
+        $autoloaderRoot = $this->config->autoloader_root ?? dirname($realPath);
+        $rootNamespace = $this->config->rootNamespace ?? '';
 
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($realPath));
 
@@ -165,6 +217,7 @@ class EventDispatcher
             $classPath = substr(ltrim($relativePath, DIRECTORY_SEPARATOR), 0, -4);
             $className = $rootNamespace . '\\' . str_replace(DIRECTORY_SEPARATOR, '\\', $classPath);
 
+            // !! class_exists выполняет исследуемый файл, поэтому нельзя класть в подключаемые папки обычные скрипты, типо cron.php
             if (!class_exists($className)) {
                 continue;
             }
@@ -194,14 +247,34 @@ class EventDispatcher
             foreach ($triggerAttrs as $attribute) {
                 $instance = $attribute->newInstance();
                 if ($instance->command) {
+                    if (isset($this->routeMap['command'][$instance->command])) {
+                        throw new LogicException(
+                            "Duplicate command route '{$instance->command}'. ".
+                            "It is already handled by '{$this->routeMap['command'][$instance->command]}'. ".
+                            "Conflict with '{$className}'."
+                        );
+                    }
                     $this->routeMap['command'][$instance->command] = $className;
                 }
                 if ($instance->pattern) {
+                    if (isset($this->routeMap['regex'][$instance->pattern])) {
+                        throw new LogicException(
+                            "Duplicate pattern route '{$instance->pattern}'. ".
+                            "It is already handled by '{$this->routeMap['regex'][$instance->pattern]}'. ".
+                            "Conflict with '{$className}'."
+                        );
+                    }
                     $this->routeMap['regex'][$instance->pattern] = $className;
                 }
             }
 
             if ($reflection->getAttributes(Fallback::class)) {
+                if ($this->fallbackAction !== null) {
+                    throw new \LogicException(
+                        "Duplicate fallback handler. It is already handled by '{$this->fallbackAction}'. ".
+                        "Conflict with '{$className}'."
+                    );
+                }
                 $this->fallbackAction = $className;
             }
         }
