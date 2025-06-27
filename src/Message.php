@@ -48,7 +48,7 @@ class Message extends BaseConstructor {
                         $is_invalid_kbd = true;
         if ($is_invalid_kbd)
             throw new SimpleVkException(0, "Класс simpleVK не имеет доступ к указанным в kbd() кнопкам, потому что они созданы классом Bot. Используйте отправку сообщения через класс bot");
-        $this->config['kbd'] = ['kbd' => $kbd, 'inline' => $inline, 'one_time' => $one_time];
+        $this->config['kbd'] = ['kbd' => $kbd, 'inline' => (bool)$inline, 'one_time' => $one_time];
         return $this;
     }
 
