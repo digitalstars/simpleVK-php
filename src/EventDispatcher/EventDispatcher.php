@@ -279,4 +279,44 @@ class EventDispatcher
             }
         }
     }
+
+    /**
+     * Собирает и возвращает отладочную информацию о состоянии диспетчера.
+     * Полезно для проверки, какие маршруты были зарегистрированы.
+     *
+     * @return array Массив с отладочной информацией.
+     */
+    public function debug(): array
+    {
+        // Убедимся, что маршруты загружены, чтобы получить актуальную информацию
+        if (!$this->isRoutesLoaded) {
+            try {
+                $this->loadRoutes();
+            } catch (\Exception $e) {
+                // Если при загрузке роутов произошла ошибка, добавим ее в вывод
+                return [
+                    'error' => 'Failed to load routes: ' . $e->getMessage(),
+                    'config' => (array) $this->config,
+                    'actions_paths' => $this->actionPaths
+                ];
+            }
+        }
+
+        return [
+            'is_routes_loaded' => $this->isRoutesLoaded,
+            'actions_paths' => $this->actionPaths,
+            'config' => [
+                'has_factory' => $this->factory !== null,
+                'has_cache' => isset($this->config->cache),
+                'root_namespace' => $this->config->rootNamespace ?? null,
+                'autoloader_root' => $this->config->autoloader_root ?? null,
+            ],
+            'routes' => [
+                'payload' => $this->routeMap['payload'],
+                'command' => $this->routeMap['command'],
+                'regex' => $this->routeMap['regex'],
+                'fallback' => $this->fallbackAction,
+            ],
+        ];
+    }
 }
