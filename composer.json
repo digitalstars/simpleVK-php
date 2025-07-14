@@ -2,8 +2,25 @@
     "name": "digitalstars/simplevk",
     "description": "Framework for creating VK.com bots and working with VK API",
     "license": "MIT",
+    "support": {
+        "issues": "https://github.com/digitalstars/simpleVK-php/issues",
+        "source": "https://github.com/digitalstars/simpleVK-php",
+        "docs": "https://simplevk.scripthub.ru/"
+    },
+    "keywords": [
+        "vk",
+        "vk.com",
+        "vk-api",
+        "vk-bot",
+        "bot",
+        "framework",
+        "longpoll",
+        "callback-api",
+        "simplevk"
+    ],
     "minimum-stability": "beta",
     "prefer-stable": true,
+    "homepage": "https://simplevk.scripthub.ru/",
     "require": {
         "php": ">=8.2",
         "ext-curl": "*",
