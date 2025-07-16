@@ -19,8 +19,6 @@ class EventDispatcher
         'regex' => [],
     ];
     private ?string $fallbackAction = null;
-    private bool $isRoutesLoaded = false;
-    private array $actionPaths = [];
     private ?\Closure $factory;
     private ArgumentResolver $argumentResolver;
 
@@ -28,35 +26,59 @@ class EventDispatcher
     {
         $this->vk = $vk;
         $this->config = $config;
-        if (isset($config->actionsPaths)) {
-            $this->registerActionPaths($config->actionsPaths);
-        }
         $this->factory = $config->getFactory();
         $this->argumentResolver = new ArgumentResolver($config->cache ?? null);
+        $this->loadRoutesFromConfig();
     }
 
-    public function registerActionPaths(array $paths): self
+    private function loadRoutesFromConfig(): void
     {
-        $this->actionPaths = array_merge($this->actionPaths, $paths);
-        return $this;
+        foreach ($this->config->actionsPaths as $path) {
+            $this->scanDirectoryForActions($path);
+        }
+
+        $routeCount = count($this->routeMap['payload']) + count($this->routeMap['command']) + count($this->routeMap['regex']);
+        if ($routeCount === 0 && $this->fallbackAction === null) {
+            throw new \LogicException(
+                "Диспетчер: Сканирование маршрутов завершено, но не найдено ни одного маршрута или fallback-обработчика. " .
+                "Убедитесь, что ваши классы-обработчики (Action) имеют атрибуты #[Trigger], #[AsButton] или #[Fallback] и находятся в правильном пространстве имен.",
+                0
+            );
+        }
     }
 
     public function handle(?array $externalEvent = null): void
     {
-        if (!$this->isRoutesLoaded) {
-            $this->loadRoutes();
+        if(is_array($externalEvent) && empty($externalEvent)) {
+            trigger_error(
+                "Диспетчер: Метод handle() был вызван с пустым массивом событий. Обработка прекращена.",
+                E_USER_NOTICE
+            );
+            return;
         }
 
         $event = $externalEvent ?? $this->vk->data;
         $this->vk->data = $event;
-        $this->vk->initText($text)->initUserID($userId)->initPayload($payload);
+        $this->vk->initText($text)->initUserID($userId)->initPayload($payload)->initType($eventType);
 
         if (is_null($userId)) {
+            if($this->config->debug){
+                trigger_error(
+                    "Диспетчер: Получено событие типа '{$eventType}' без user_id. Обработка пропущена.",
+                    E_USER_NOTICE
+                );
+            }
+//
             return;
         }
 
         $route = $this->findRoute($text, $payload);
+        $payloadJson = json_encode($payload);
         if (!$route) {
+            trigger_error(
+                "Диспетчер: Не найден подходящий маршрут для пользователя '{$userId}'. Текст: '{$text}', Payload: {$payloadJson}. Резервный обработчик (fallback) не настроен.",
+                E_USER_NOTICE
+            );
             return;
         }
 
@@ -156,7 +178,6 @@ class EventDispatcher
      * @param class-string<T> $className
      * @param Context $context
      * @return T
-     * @throws ReflectionException
      */
     public function createInstance(string $className, Context $context): object
     {
@@ -166,45 +187,45 @@ class EventDispatcher
         if (is_callable($this->factory)) {
             try {
                 $instance = $context->get($className);
-            } catch (\Throwable) {}
+            } catch (\Throwable $e) {
+                if($this->config->debug){
+                    trigger_error(
+                        "Диспетчер: Настроенная фабрика/DI-контейнер не смог создать экземпляр класса '{$className}'. Ошибка: {$e->getMessage()}",
+                        E_USER_WARNING
+                    );
+                }
+            }
         }
 
         // Приоритет 2: Ручное создание, если фабрика не справилась или ее нет.
         if (!$instance) {
-            $reflectionClass = new ReflectionClass($className);
-            $constructor = $reflectionClass->getConstructor();
-            if ($constructor) {
-                // Рантайм-аргументы сюда НЕ передаются.
-                $constructorArgs = $this->argumentResolver->getArguments($constructor, $context);
-                $instance = $reflectionClass->newInstanceArgs($constructorArgs);
-            } else {
-                $instance = $reflectionClass->newInstance();
+            try {
+                $reflectionClass = new ReflectionClass($className);
+                $constructor = $reflectionClass->getConstructor();
+                if ($constructor) {
+                    // Рантайм-аргументы сюда НЕ передаются.
+                    $constructorArgs = $this->argumentResolver->getArguments($constructor, $context);
+                    $instance = $reflectionClass->newInstanceArgs($constructorArgs);
+                } else {
+                    $instance = $reflectionClass->newInstance();
+                }
+            } catch (\Throwable $e) {
+                throw new \RuntimeException(
+                    "Диспетчер: Не удалось создать экземпляр класса '{$className}' через рефлексию. " .
+                    "Проверьте его конструктор и зависимости. Исходная ошибка: " . $e->getMessage(),0, $e
+                );
             }
+
         }
         return $instance;
-    }
-
-    private function loadRoutes(): void
-    {
-        if ($this->isRoutesLoaded) {
-            return;
-        }
-        foreach ($this->actionPaths as $path) {
-            $this->scanDirectoryForActions($path);
-        }
-        $this->isRoutesLoaded = true;
     }
 
     private function scanDirectoryForActions(string $path): void
     {
         $realPath = realpath($path);
-        if (!$realPath) {
-            return;
-        }
 
-        //todo а нужен ли autoloader_root?
-        $autoloaderRoot = $this->config->autoloader_root ?? dirname($realPath);
-        $rootNamespace = $this->config->rootNamespace ?? '';
+        $autoloaderRoot = dirname($realPath);
+        $rootNamespace = $this->config->rootNamespace;
 
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($realPath));
 
@@ -219,6 +240,18 @@ class EventDispatcher
 
             // !! class_exists выполняет исследуемый файл, поэтому нельзя класть в подключаемые папки обычные скрипты, типо cron.php
             if (!class_exists($className)) {
+                if ($this->config->debug) {
+                    $rootNsInfo = "с корневым пространством имен '{$this->config->rootNamespace}'";
+
+                    trigger_error(
+                        "Диспетчер: Не удалось загрузить класс '{$className}', сформированный из файла '{$file->getBasename()}' {$rootNsInfo}. \n" .
+                        "Возможные причины: \n" .
+                        "1. Опечатка в 'rootNamespace' или имени класса/файла (проверьте PSR-4). \n" .
+                        "2. Вы изменили autoload в composer.json, но не выполнили команду 'composer dump-autoload'. \n" . // <-- ВАША ПОДСКАЗКА
+                        "3. Файл не содержит класс (например, это файл с функциями-помощниками).",
+                        E_USER_NOTICE
+                    );
+                }
                 continue;
             }
 
@@ -236,8 +269,9 @@ class EventDispatcher
                     $actionName = $instance->payload ?? $reflection->getShortName();
                     $this->routeMap['payload'][$actionName] = $className;
                 } else {
+                    //todo возможно изменить
                     trigger_error(
-                        "Attribute #[AsButton] can only be used on classes that extend BaseButton. Class: '{$className}'.",
+                        "Диспетчер: Атрибут #[AsButton] можно использовать только для классов, наследующих BaseButton. Ошибка в классе: '{$className}'.",
                         E_USER_WARNING
                     );
                 }
@@ -248,20 +282,22 @@ class EventDispatcher
                 $instance = $attribute->newInstance();
                 if ($instance->command) {
                     if (isset($this->routeMap['command'][$instance->command])) {
+                        $existingHandler = $this->routeMap['command'][$instance->command];
                         throw new LogicException(
-                            "Duplicate command route '{$instance->command}'. ".
-                            "It is already handled by '{$this->routeMap['command'][$instance->command]}'. ".
-                            "Conflict with '{$className}'."
+                            "Дублирующаяся команда '{$instance->command}'.\n" .
+                            "Она уже обрабатывается классом '{$existingHandler}'.\n" .
+                            "Конфликт с классом '{$className}'."
                         );
                     }
                     $this->routeMap['command'][$instance->command] = $className;
                 }
                 if ($instance->pattern) {
                     if (isset($this->routeMap['regex'][$instance->pattern])) {
+                        $existingHandler = $this->routeMap['regex'][$instance->pattern];
                         throw new LogicException(
-                            "Duplicate pattern route '{$instance->pattern}'. ".
-                            "It is already handled by '{$this->routeMap['regex'][$instance->pattern]}'. ".
-                            "Conflict with '{$className}'."
+                            "Дублирующийся паттерн (регулярное выражение) '{$instance->pattern}'.\n" .
+                            "Он уже обрабатывается классом '{$existingHandler}'.\n" .
+                            "Конфликт с классом '{$className}'."
                         );
                     }
                     $this->routeMap['regex'][$instance->pattern] = $className;
@@ -271,8 +307,10 @@ class EventDispatcher
             if ($reflection->getAttributes(Fallback::class)) {
                 if ($this->fallbackAction !== null) {
                     throw new \LogicException(
-                        "Duplicate fallback handler. It is already handled by '{$this->fallbackAction}'. ".
-                        "Conflict with '{$className}'."
+                        "Обнаружен дублирующийся резервный обработчик (Fallback).\n" .
+                        "Он уже назначен классу '{$this->fallbackAction}'.\n" .
+                        "Конфликт с классом '{$className}'. " .
+                        "В системе может быть только один fallback-обработчик."
                     );
                 }
                 $this->fallbackAction = $className;
@@ -288,28 +326,14 @@ class EventDispatcher
      */
     public function debug(): array
     {
-        // Убедимся, что маршруты загружены, чтобы получить актуальную информацию
-        if (!$this->isRoutesLoaded) {
-            try {
-                $this->loadRoutes();
-            } catch (\Exception $e) {
-                // Если при загрузке роутов произошла ошибка, добавим ее в вывод
-                return [
-                    'error' => 'Failed to load routes: ' . $e->getMessage(),
-                    'config' => (array) $this->config,
-                    'actions_paths' => $this->actionPaths
-                ];
-            }
-        }
-
+        $actionRealPaths = array_map('realpath', $this->config->actionsPaths);
         return [
-            'is_routes_loaded' => $this->isRoutesLoaded,
-            'actions_paths' => $this->actionPaths,
             'config' => [
+                'debug_mode' => $this->config->debug,
+                'actions_paths' => $actionRealPaths,
+                'root_namespace' => $this->config->rootNamespace,
                 'has_factory' => $this->factory !== null,
-                'has_cache' => isset($this->config->cache),
-                'root_namespace' => $this->config->rootNamespace ?? null,
-                'autoloader_root' => $this->config->autoloader_root ?? null,
+                'has_cache' => $this->config->cache !== null,
             ],
             'routes' => [
                 'payload' => $this->routeMap['payload'],
