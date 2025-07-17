@@ -21,6 +21,7 @@ class EventDispatcher
     private ?string $fallbackAction = null;
     private ?\Closure $factory;
     private ArgumentResolver $argumentResolver;
+    private array $scannedFiles = [];
 
     public function __construct(SimpleVK $vk, DispatcherConfig $config)
     {
@@ -33,8 +34,13 @@ class EventDispatcher
 
     private function loadRoutesFromConfig(): void
     {
-        foreach ($this->config->actionsPaths as $path) {
-            $this->scanDirectoryForActions($path);
+        foreach ($this->config->actionsPaths as $namespace => $pathOrPaths) {
+            // Превращаем одиночный путь в массив для единообразной обработки
+            $pathsToScan = is_array($pathOrPaths) ? $pathOrPaths : [$pathOrPaths];
+
+            foreach ($pathsToScan as $path) {
+                $this->scanDirectoryForActions($path, $namespace);
+            }
         }
 
         $routeCount = count($this->routeMap['payload']) + count($this->routeMap['command']) + count($this->routeMap['regex']);
@@ -47,6 +53,10 @@ class EventDispatcher
         }
     }
 
+    /**
+     * @param array|null $externalEvent
+     * @api
+     */
     public function handle(?array $externalEvent = null): void
     {
         if(is_array($externalEvent) && empty($externalEvent)) {
@@ -137,6 +147,11 @@ class EventDispatcher
         return null;
     }
 
+    /**
+     * @param array $event
+     * @return Context
+     * @api
+     */
     public function createContextFromEvent(array $event): Context
     {
         $this->vk->data = $event;
@@ -146,7 +161,7 @@ class EventDispatcher
     }
 
     /**
-     * @throws ReflectionException
+     * @api
      */
     public function runAction(string $actionClass, Context $context, array $actionArgs = []): void
     {
@@ -220,42 +235,42 @@ class EventDispatcher
         return $instance;
     }
 
-    private function scanDirectoryForActions(string $path): void
+    private function scanDirectoryForActions(string $path, string $rootNamespace): void
     {
         $realPath = realpath($path);
-
-        $autoloaderRoot = dirname($realPath);
-        $rootNamespace = $this->config->rootNamespace;
-
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($realPath));
 
         foreach ($iterator as $file) {
+            $filePath = $file->getRealPath();
+
+            if (isset($this->scannedFiles[$filePath])) {
+                continue;
+            }
+
             if (!$file->isFile() || $file->getExtension() !== 'php') {
                 continue;
             }
 
-            $relativePath = str_replace($autoloaderRoot, '', $file->getRealPath());
-            $classPath = substr(ltrim($relativePath, DIRECTORY_SEPARATOR), 0, -4);
-            $className = $rootNamespace . '\\' . str_replace(DIRECTORY_SEPARATOR, '\\', $classPath);
+            $this->scannedFiles[$filePath] = true;
 
-            // !! class_exists выполняет исследуемый файл, поэтому нельзя класть в подключаемые папки обычные скрипты, типо cron.php
-            if (!class_exists($className)) {
-                if ($this->config->debug) {
-                    $rootNsInfo = "с корневым пространством имен '{$this->config->rootNamespace}'";
+            $relativePath = str_replace($realPath, '', $file->getRealPath());
+            $classPath = str_replace(DIRECTORY_SEPARATOR, '\\', substr($relativePath, 0, -4));
+            $className = rtrim($rootNamespace, '\\') . '\\' . ltrim($classPath, '\\');
 
-                    trigger_error(
-                        "Диспетчер: Не удалось загрузить класс '{$className}', сформированный из файла '{$file->getBasename()}' {$rootNsInfo}. \n" .
-                        "Возможные причины: \n" .
-                        "1. Опечатка в 'rootNamespace' или имени класса/файла (проверьте PSR-4). \n" .
-                        "2. Вы изменили autoload в composer.json, но не выполнили команду 'composer dump-autoload'. \n" . // <-- ВАША ПОДСКАЗКА
-                        "3. Файл не содержит класс (например, это файл с функциями-помощниками).",
-                        E_USER_NOTICE
-                    );
-                }
+            try {
+                // Если класс уже загружен (например, DI-компилятором), ReflectionClass просто создастся.
+                // Если нет, будет вызвана автозагрузка. Если автозагрузка не найдет класс, будет выброшено исключение.
+                $reflection = new ReflectionClass($className);
+            } catch (\ReflectionException $e) {
+//                if ($this->config->debug) {
+                trigger_error(
+                    "Диспетчер: Не удалось найти или загрузить класс '{$className}'.\n" .
+                    "Убедитесь, что для него правильно настроен автозагрузчик PSR-4 в composer.json и выполнена команда 'composer dump-autoload'.",
+                    E_USER_WARNING
+                );
+//                }
                 continue;
             }
-
-            $reflection = new ReflectionClass($className);
             if ($reflection->isAbstract()) {
                 continue;
             }
@@ -323,6 +338,7 @@ class EventDispatcher
      * Полезно для проверки, какие маршруты были зарегистрированы.
      *
      * @return array Массив с отладочной информацией.
+     * @api
      */
     public function debug(): array
     {
@@ -331,7 +347,6 @@ class EventDispatcher
             'config' => [
                 'debug_mode' => $this->config->debug,
                 'actions_paths' => $actionRealPaths,
-                'root_namespace' => $this->config->rootNamespace,
                 'has_factory' => $this->factory !== null,
                 'has_cache' => $this->config->cache !== null,
             ],
