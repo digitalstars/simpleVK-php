@@ -147,7 +147,7 @@ class EventDispatcher
         $this->vk->data = $event;
         $this->vk->initText($text)->initUserID($userId)->initPeerID($peerId)->initData($rawEvent);
 //        var_dump($text, $userId, $peerId, $rawEvent);
-        return new Context($this->vk, $this, $this->argumentResolver, $rawEvent, $userId, $peerId, $text, $this->factory);
+        return new Context($this->vk, $this, $this->argumentResolver, (object)$rawEvent, $userId, $peerId, $text, $this->factory);
     }
 
     /**
