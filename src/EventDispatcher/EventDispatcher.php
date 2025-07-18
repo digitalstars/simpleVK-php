@@ -2,12 +2,16 @@
 
 namespace DigitalStars\SimpleVK\EventDispatcher;
 
+use Closure;
 use DigitalStars\SimpleVK\SimpleVK;
 use DigitalStars\SimpleVK\Attributes\{AsButton, Trigger, Fallback};
 use LogicException;
+use PhpToken;
 use ReflectionClass;
 use RecursiveIteratorIterator, RecursiveDirectoryIterator;
 use ReflectionException;
+use RuntimeException;
+use Throwable;
 
 class EventDispatcher
 {
@@ -19,7 +23,7 @@ class EventDispatcher
         'regex' => [],
     ];
     private ?string $fallbackAction = null;
-    private ?\Closure $factory;
+    private ?Closure $factory;
     private ArgumentResolver $argumentResolver;
     private array $scannedFiles = [];
 
@@ -34,18 +38,13 @@ class EventDispatcher
 
     private function loadRoutesFromConfig(): void
     {
-        foreach ($this->config->actionsPaths as $namespace => $pathOrPaths) {
-            // Превращаем одиночный путь в массив для единообразной обработки
-            $pathsToScan = is_array($pathOrPaths) ? $pathOrPaths : [$pathOrPaths];
-
-            foreach ($pathsToScan as $path) {
-                $this->scanDirectoryForActions($path, $namespace);
-            }
+        foreach ($this->config->actionsPaths as $path) {
+            $this->scanDirectoryForActions($path);
         }
 
         $routeCount = count($this->routeMap['payload']) + count($this->routeMap['command']) + count($this->routeMap['regex']);
         if ($routeCount === 0 && $this->fallbackAction === null) {
-            throw new \LogicException(
+            throw new LogicException(
                 "Диспетчер: Сканирование маршрутов завершено, но не найдено ни одного маршрута или fallback-обработчика. " .
                 "Убедитесь, что ваши классы-обработчики (Action) имеют атрибуты #[Trigger], #[AsButton] или #[Fallback] и находятся в правильном пространстве имен.",
                 0
@@ -53,10 +52,6 @@ class EventDispatcher
         }
     }
 
-    /**
-     * @param array|null $externalEvent
-     * @api
-     */
     public function handle(?array $externalEvent = null): void
     {
         if(is_array($externalEvent) && empty($externalEvent)) {
@@ -83,7 +78,7 @@ class EventDispatcher
         }
 
         $route = $this->findRoute($text, $payload);
-        $payloadJson = json_encode($payload);
+        $payloadJson = json_encode($payload, JSON_THROW_ON_ERROR);
         if (!$route) {
             trigger_error(
                 "Диспетчер: Не найден подходящий маршрут для пользователя '{$userId}'. Текст: '{$text}', Payload: {$payloadJson}. Резервный обработчик (fallback) не настроен.",
@@ -147,21 +142,16 @@ class EventDispatcher
         return null;
     }
 
-    /**
-     * @param array $event
-     * @return Context
-     * @api
-     */
     public function createContextFromEvent(array $event): Context
     {
         $this->vk->data = $event;
         $this->vk->initText($text)->initUserID($userId)->initPeerID($peerId)->initData($rawEvent);
 //        var_dump($text, $userId, $peerId, $rawEvent);
-        return new Context($this->vk, $this, $this->argumentResolver, (object)$rawEvent, $userId, $peerId, $text, $this->factory);
+        return new Context($this->vk, $this, $this->argumentResolver, $rawEvent, $userId, $peerId, $text, $this->factory);
     }
 
     /**
-     * @api
+     * @throws ReflectionException
      */
     public function runAction(string $actionClass, Context $context, array $actionArgs = []): void
     {
@@ -177,7 +167,7 @@ class EventDispatcher
         }
 
         if (!method_exists($instance, 'handle')) {
-            throw new \RuntimeException("Класс {$actionClass} должен иметь метод handle()");
+            throw new RuntimeException("Класс {$actionClass} должен иметь метод handle()");
         }
 
         $reflectionMethod = $reflectionClass->getMethod('handle');
@@ -202,7 +192,7 @@ class EventDispatcher
         if (is_callable($this->factory)) {
             try {
                 $instance = $context->get($className);
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 if($this->config->debug){
                     trigger_error(
                         "Диспетчер: Настроенная фабрика/DI-контейнер не смог создать экземпляр класса '{$className}'. Ошибка: {$e->getMessage()}",
@@ -224,8 +214,8 @@ class EventDispatcher
                 } else {
                     $instance = $reflectionClass->newInstance();
                 }
-            } catch (\Throwable $e) {
-                throw new \RuntimeException(
+            } catch (Throwable $e) {
+                throw new RuntimeException(
                     "Диспетчер: Не удалось создать экземпляр класса '{$className}' через рефлексию. " .
                     "Проверьте его конструктор и зависимости. Исходная ошибка: " . $e->getMessage(),0, $e
                 );
@@ -235,7 +225,7 @@ class EventDispatcher
         return $instance;
     }
 
-    private function scanDirectoryForActions(string $path, string $rootNamespace): void
+    private function scanDirectoryForActions(string $path): void
     {
         $realPath = realpath($path);
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($realPath));
@@ -253,15 +243,16 @@ class EventDispatcher
 
             $this->scannedFiles[$filePath] = true;
 
-            $relativePath = str_replace($realPath, '', $file->getRealPath());
-            $classPath = str_replace(DIRECTORY_SEPARATOR, '\\', substr($relativePath, 0, -4));
-            $className = rtrim($rootNamespace, '\\') . '\\' . ltrim($classPath, '\\');
+            $className = $this->getClassNameFromFile($filePath);
+            if ($className === null) {
+                continue; // Не удалось определить класс в файле
+            }
 
             try {
                 // Если класс уже загружен (например, DI-компилятором), ReflectionClass просто создастся.
                 // Если нет, будет вызвана автозагрузка. Если автозагрузка не найдет класс, будет выброшено исключение.
                 $reflection = new ReflectionClass($className);
-            } catch (\ReflectionException $e) {
+            } catch (ReflectionException) {
 //                if ($this->config->debug) {
                 trigger_error(
                     "Диспетчер: Не удалось найти или загрузить класс '{$className}'.\n" .
@@ -321,7 +312,7 @@ class EventDispatcher
 
             if ($reflection->getAttributes(Fallback::class)) {
                 if ($this->fallbackAction !== null) {
-                    throw new \LogicException(
+                    throw new LogicException(
                         "Обнаружен дублирующийся резервный обработчик (Fallback).\n" .
                         "Он уже назначен классу '{$this->fallbackAction}'.\n" .
                         "Конфликт с классом '{$className}'. " .
@@ -334,11 +325,72 @@ class EventDispatcher
     }
 
     /**
+     * Получает полное имя класса (FQCN) из PHP-файла путем парсинга токенов.
+     *
+     * @param string $filePath Абсолютный путь к PHP-файлу.
+     * @return string|null Полное имя класса или null, если не найдено.
+     */
+    private function getClassNameFromFile(string $filePath): ?string
+    {
+        //отрабатывает ~1ms на ноуте
+        $content = file_get_contents($filePath);
+        $tokens = PhpToken::tokenize($content);
+
+        $namespace = '';
+        $class = '';
+
+        // 0 = начальное состояние
+        // 1 = найден токен T_NAMESPACE, собираем имя пространства имен
+        // 2 = найден токен T_CLASS, собираем имя класса
+        $state = 0;
+
+        foreach ($tokens as $token) {
+            if ($token->is(T_WHITESPACE) || $token->is(T_COMMENT)) {
+                continue;
+            }
+
+            switch ($state) {
+                // Ищем начало namespace или class
+                case 0:
+                    if ($token->is(T_NAMESPACE)) {
+                        $state = 1;
+                    } elseif ($token->is(T_CLASS)) {
+                        $state = 2;
+                    }
+                    break;
+
+                // Собираем имя namespace
+                case 1:
+                    if ($token->is([T_STRING, T_NAME_QUALIFIED, T_NS_SEPARATOR])) {
+                        $namespace .= $token->text;
+                    } elseif ($token->text === ';') {
+                        $state = 0; // Закончили с namespace, ищем дальше
+                    }
+                    break;
+
+                // Ищем имя класса
+                case 2:
+                    if ($token->is(T_STRING)) {
+                        $class = $token->text;
+                        // Класс найден, дальнейший парсинг не нужен
+                        break 2;
+                    }
+                    break;
+            }
+        }
+
+        if (empty($class)) {
+            return null;
+        }
+
+        return $namespace ? rtrim($namespace, '\\') . '\\' . $class : $class;
+    }
+
+    /**
      * Собирает и возвращает отладочную информацию о состоянии диспетчера.
      * Полезно для проверки, какие маршруты были зарегистрированы.
      *
      * @return array Массив с отладочной информацией.
-     * @api
      */
     public function debug(): array
     {

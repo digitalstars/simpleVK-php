@@ -9,18 +9,19 @@ use Psr\Container\ContainerInterface;
 class DispatcherConfig
 {
     private ?Closure $factory = null;
+    public readonly array $actionsPaths;
 
     /**
-     * @param array $actionsPaths Ассоциативный массив ['RootNamespace\\' => '/path/to/dir' или ['/path1', '/path2']].
+     * @param array|string $actionsPaths Массив путей к директориям с Action-классами.
      * @param bool $debug
      * @param CacheInterface|null $cache
-     * @throws InvalidArgumentException
      */
     public function __construct(
-        public readonly array $actionsPaths,
+        array|string $actionsPaths,
         public readonly bool $debug = false,
         public readonly ?CacheInterface $cache = null
     ) {
+        $this->actionsPaths = is_string($actionsPaths) ? [$actionsPaths] : $actionsPaths;
         $this->validatePaths();
     }
 
@@ -29,26 +30,15 @@ class DispatcherConfig
     {
         if (empty($this->actionsPaths)) {
             throw new InvalidArgumentException(
-                "Ошибка конфигурации диспетчера: массив путей (paths) не может быть пустым."
+                "Ошибка конфигурации диспетчера: массив путей (actionsPaths) не может быть пустым."
             );
         }
 
-        foreach ($this->actionsPaths as $namespace => $pathOrPaths) {
-            // Превращаем одиночный путь в массив для единообразной обработки
-            $pathsToCheck = is_array($pathOrPaths) ? $pathOrPaths : [$pathOrPaths];
-
-            if (empty($pathsToCheck)) {
+        foreach ($this->actionsPaths as $path) {
+            if (!is_string($path) || !is_dir($path)) {
                 throw new InvalidArgumentException(
-                    "Ошибка конфигурации диспетчера: для пространства имен '{$namespace}' указан пустой массив путей."
+                    "Ошибка конфигурации диспетчера: указанный путь '{$path}' не существует или не является директорией."
                 );
-            }
-
-            foreach ($pathsToCheck as $path) {
-                if (!is_string($path) || !is_dir($path)) {
-                    throw new InvalidArgumentException(
-                        "Ошибка конфигурации диспетчера: указанный путь '{$path}' для пространства имен '{$namespace}' не существует или не является директорией."
-                    );
-                }
             }
         }
     }
@@ -58,7 +48,6 @@ class DispatcherConfig
      * @param callable $factory Логика для создания объекта.
      *        Может быть передана как анонимная функция, так и метод существующего объекта.
      * @return $this
-     * @api
      */
     public function withFactory(callable $factory): self
     {
