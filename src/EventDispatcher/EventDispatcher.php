@@ -27,6 +27,8 @@ class EventDispatcher
     private ArgumentResolver $argumentResolver;
     private array $scannedFiles = [];
 
+    private bool $globalMiddlewareExecuted = false;
+
     public function __construct(SimpleVK $vk, DispatcherConfig $config)
     {
         $this->vk = $vk;
@@ -61,6 +63,8 @@ class EventDispatcher
             );
             return;
         }
+
+        $this->globalMiddlewareExecuted = false;
 
         $event = $externalEvent ?? $this->vk->data;
         $this->vk->data = $event;
@@ -169,7 +173,18 @@ class EventDispatcher
         $actionMiddlewareAttrs = $reflectionClass->getAttributes(UseMiddleware::class);
         $actionMiddleware = array_map(static fn($attr) => $attr->newInstance()->middleware, $actionMiddlewareAttrs);
 
-        $middlewareStack = array_merge($globalMiddleware, $actionMiddleware);
+        $middlewareStack = [];
+
+        if (!$this->globalMiddlewareExecuted) {
+            // Первый раз - добавляем глобальные middleware
+            $globalMiddleware = $this->config->getMiddleware();
+            $middlewareStack = array_merge($globalMiddleware, $actionMiddleware);
+            $this->globalMiddlewareExecuted = true;
+        } else {
+            // Повторный вызов - только Action-специфичные middleware
+            $middlewareStack = $actionMiddleware;
+        }
+
 
         $finalHandler = function (Context $ctx) use ($instance, $reflectionClass, $actionClass, $actionArgs) {
             if (method_exists($instance, 'before')) {
