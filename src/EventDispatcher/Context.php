@@ -11,6 +11,11 @@ use RuntimeException;
 
 class Context
 {
+    /** @var class-string|null Класс текущего обрабатываемого Action */
+    public ?string $actionClass = null;
+
+    private array $attributes = [];
+
     public function __construct(
         public readonly SimpleVK $vk,
         private readonly EventDispatcher $dispatcher,
@@ -25,6 +30,28 @@ class Context
          */
         private readonly ?Closure $factory = null,
     ) {
+    }
+
+    /**
+     * Возвращает значение атрибута.
+     *
+     * @template T
+     * @param string $name Имя атрибута.
+     * @param T|null $default Значение по умолчанию.
+     * @return T|null
+     */
+    public function getAttribute(string $name, $default = null)
+    {
+        return $this->attributes[$name] ?? $default;
+    }
+
+    /**
+     * Устанавливает значение атрибута.
+     */
+    public function setAttribute(string $name, $value): self
+    {
+        $this->attributes[$name] = $value;
+        return $this;
     }
 
     /**

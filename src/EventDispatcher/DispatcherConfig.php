@@ -10,6 +10,7 @@ class DispatcherConfig
 {
     private ?Closure $factory = null;
     public readonly array $actionsPaths;
+    private array $middleware = []; // <-- Добавить свойство
 
     /**
      * @param array|string $actionsPaths Массив путей к директориям с Action-классами.
@@ -74,5 +75,24 @@ class DispatcherConfig
     public function getFactory(): ?callable
     {
         return $this->factory;
+    }
+
+    /**
+     * Задает глобальные middleware, которые будут применены ко всем экшенам.
+     * @param array<class-string<MiddlewareInterface>> $middlewareStack Массив классов middleware.
+     * @return $this
+     */
+    public function withMiddleware(array $middlewareStack): self
+    {
+        $this->middleware = $middlewareStack;
+        return $this;
+    }
+
+    /**
+     * @return array<class-string<MiddlewareInterface>>
+     */
+    public function getMiddleware(): array
+    {
+        return $this->middleware;
     }
 }

@@ -4,7 +4,7 @@ namespace DigitalStars\SimpleVK\EventDispatcher;
 
 use Closure;
 use DigitalStars\SimpleVK\SimpleVK;
-use DigitalStars\SimpleVK\Attributes\{AsButton, Trigger, Fallback};
+use DigitalStars\SimpleVK\Attributes\{AsButton, Trigger, Fallback, UseMiddleware};
 use LogicException;
 use PhpToken;
 use ReflectionClass;
@@ -78,8 +78,12 @@ class EventDispatcher
         }
 
         $route = $this->findRoute($text, $payload);
-        $payloadJson = json_encode($payload, JSON_THROW_ON_ERROR);
-        if (!$route) {
+
+        $actionClass = $route['actionClass'] ?? $this->fallbackAction;
+        $actionArgs = $route['actionArgs'] ?? [];
+
+        if (!$actionClass) {
+            $payloadJson = json_encode($payload);
             trigger_error(
                 "Диспетчер: Не найден подходящий маршрут для пользователя '{$userId}'. Текст: '{$text}', Payload: {$payloadJson}. Резервный обработчик (fallback) не настроен.",
                 E_USER_NOTICE
@@ -88,7 +92,8 @@ class EventDispatcher
         }
 
         $context = $this->createContextFromEvent($event);
-        $this->runAction($route['actionClass'], $context, $route['actionArgs']);
+        $context->actionClass = $actionClass;
+        $this->runAction($actionClass, $context, $actionArgs);
     }
 
     /**
@@ -156,23 +161,48 @@ class EventDispatcher
     public function runAction(string $actionClass, Context $context, array $actionArgs = []): void
     {
         $instance = $this->createInstance($actionClass, $context);
-        $reflectionClass = new ReflectionClass($actionClass); // нужен для getMethod
+        $reflectionClass = new ReflectionClass($actionClass);
 
-        if (method_exists($instance, 'before')) {
-            $reflectionMethod = $reflectionClass->getMethod('before');
-            $beforeArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $actionArgs);
-            if ($instance->before(...$beforeArgs) === false) {
-                return;
+        //Собираем все middleware в один массив.
+        //Сначала глобальные, потом #[UseMiddleware] из Action
+        $globalMiddleware = $this->config->getMiddleware();
+        $actionMiddlewareAttrs = $reflectionClass->getAttributes(UseMiddleware::class);
+        $actionMiddleware = array_map(static fn($attr) => $attr->newInstance()->middleware, $actionMiddlewareAttrs);
+
+        $middlewareStack = array_merge($globalMiddleware, $actionMiddleware);
+
+        $finalHandler = function (Context $ctx) use ($instance, $reflectionClass, $actionClass, $actionArgs) {
+            if (method_exists($instance, 'before')) {
+                $reflectionMethod = $reflectionClass->getMethod('before');
+                $beforeArgs = $this->argumentResolver->getArguments($reflectionMethod, $ctx, $actionArgs);
+                if ($instance->before(...$beforeArgs) === false) {
+                    return;
+                }
             }
-        }
 
-        if (!method_exists($instance, 'handle')) {
-            throw new RuntimeException("Класс {$actionClass} должен иметь метод handle()");
-        }
+            if (!method_exists($instance, 'handle')) {
+                throw new \RuntimeException("Класс {$actionClass} должен иметь метод handle()");
+            }
 
-        $reflectionMethod = $reflectionClass->getMethod('handle');
-        $resolvedArgs = $this->argumentResolver->getArguments($reflectionMethod, $context, $actionArgs);
-        $instance->handle(...$resolvedArgs);
+            $reflectionMethod = $reflectionClass->getMethod('handle');
+            $resolvedArgs = $this->argumentResolver->getArguments($reflectionMethod, $ctx, $actionArgs);
+            $instance->handle(...$resolvedArgs);
+        };
+
+        //Собирает конвеер вызовов в виде луковицы. Вызовы сначала глобальных, потом #[UseMiddleware]
+        $pipeline = array_reduce(
+            array_reverse($middlewareStack),
+            function ($next, $middlewareClass) use ($context) {
+                return function (Context $ctx) use ($next, $middlewareClass, $context) {
+                    /** @var MiddlewareInterface $middlewareInstance */
+                    $middlewareInstance = $this->createInstance($middlewareClass, $context);
+                    $middlewareInstance->process($ctx, $next);
+                };
+            },
+            $finalHandler
+        );
+
+        $pipeline($context);
     }
 
     /**
@@ -254,10 +284,10 @@ class EventDispatcher
                 $reflection = new ReflectionClass($className);
             } catch (ReflectionException) {
 //                if ($this->config->debug) {
-                trigger_error(
-                    "Диспетчер: Не удалось найти или загрузить класс '{$className}'.\n" .
-                    "Убедитесь, что для него правильно настроен автозагрузчик PSR-4 в composer.json и выполнена команда 'composer dump-autoload'.",
-                    E_USER_WARNING
+                throw new LogicException(
+                    "Диспетчер: Не удалось найти или загрузить класс '{$className}', который был определён в файле '{$filePath}'.\n" .
+                    "Убедитесь, что пространство имён (namespace) в файле соответствует его расположению в директории (согласно PSR-4), " .
+                    "а также что выполнена команда 'composer dump-autoload'."
                 );
 //                }
                 continue;
@@ -276,9 +306,8 @@ class EventDispatcher
                     $this->routeMap['payload'][$actionName] = $className;
                 } else {
                     //todo возможно изменить
-                    trigger_error(
+                    throw new LogicException(
                         "Диспетчер: Атрибут #[AsButton] можно использовать только для классов, наследующих BaseButton. Ошибка в классе: '{$className}'.",
-                        E_USER_WARNING
                     );
                 }
             }
