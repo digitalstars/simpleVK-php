@@ -22,17 +22,9 @@ trait ErrorHandler
 
     private array $snippet_cache = [];
 
-    private bool $isAlreadyExiting = false;
+    private array $fileContentCache = [];
 
-    private const NO_TRACE_ERROR_TYPES = [
-        E_WARNING,   // Системные предупреждения
-        E_NOTICE,    // Системные уведомления
-        E_USER_WARNING,   // Пользовательские предупреждения
-        E_USER_NOTICE,    // Пользовательские уведомления
-        E_USER_ERROR,     // Пользовательские ошибки
-        E_DEPRECATED,     // Устаревшие функции
-        E_USER_DEPRECATED // Пользовательские устаревшие функции
-    ];
+    private bool $isAlreadyExiting = false;
 
     private const VENDOR_PATH_PATTERN = '#/(vendor|simplevk[^/]*/src)(/.*)#i';
 
@@ -116,30 +108,23 @@ trait ErrorHandler
         ?int $code = null,
         ?Throwable $exception = null,
     ): bool {
+        $this->snippet_cache = [];
+        $this->fileContentCache = [];
         // если ошибка не подавлена оператором @
         if (!(error_reporting() & $type)) {
             return true; // Не обрабатываем подавленные ошибки
         }
 
-        $is_artificial_trace = false;
-
-        if ($exception) {
-            $trace_data = $exception->getTrace();
-
-            if (empty($trace_data)) {
-                $trace_data = [['file' => $file, 'line' => $line]];
-                $is_artificial_trace = true;
-            }
-        } else {
+        if (!$exception) {
             $exception = new ErrorException($message, 0, $type, $file, $line);
-            $trace_data = $exception->getTrace();
-            $is_artificial_trace = true;
         }
+
+        $trace_data = $exception->getTrace();
 
         // --- 2. Определение уровня и типа ошибки ---
         [$error_level, $error_type] = $this->defaultErrorLevelMap()[$type] ?? ['NOTICE', 'UNKNOWN'];
 
-        $trace_model = $this->prepareTraceModel($trace_data, $file, $line, $is_artificial_trace);
+        $trace_model = $this->prepareTraceModel($trace_data, $file, $line, $exception);
 
         // 2. РЕНДЕРИНГ ТРЕЙСОВ
         $console_trace = $this->renderTrace($trace_model, with_colors: true, shorten_paths: false);
@@ -189,14 +174,22 @@ trait ErrorHandler
         };
     }
 
+    /**
+     * Проверяет наличие фатальных ошибок при завершении работы скрипта.
+     * Вызывается через register_shutdown_function как последний рубеж обороны.
+     * Ловит ошибки, которые не могут быть обработаны через set_exception_handler, такие, как:
+     * - Истощение памяти (memory_limit).
+     * - Превышение времени выполнения (max_execution_time).
+     */
     private function checkForFatalError(): void
     {
         if ($this->isAlreadyExiting) {
             return;
         }
         if ($error = error_get_last()) {
+            var_dump($error);
             $type = $error['type'];
-            if ($type & DEFAULT_ERROR_LOG) {
+            if ($type & (E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_RECOVERABLE_ERROR)) {
                 $exception = new ErrorException(
                     $error['message'],
                     0, // code
@@ -273,7 +266,7 @@ trait ErrorHandler
                         'dont_parse_links' => 1
                     ], use_placeholders: false);
                 } catch (Exception $e) {
-                    $this->send_error_in_vk = false;
+                    //$this->send_error_in_vk = false; //todo это проблема для longpoll
                     trigger_error('Не удалось отправить ошибку в ЛС: ' . $e->getMessage(), E_USER_WARNING);
                 }
             }
@@ -288,17 +281,15 @@ trait ErrorHandler
             return $this->snippet_cache[$cache_key];
         }
 
-        static $files_cache = [];
-
-        if (!isset($files_cache[$file]) && is_readable($file)) {
-            $files_cache[$file] = file($file, FILE_IGNORE_NEW_LINES);
+        if (!isset($this->fileContentCache[$file]) && is_readable($file)) {
+            $this->fileContentCache[$file] = file($file, FILE_IGNORE_NEW_LINES);
         }
 
-        if (!isset($files_cache[$file])) {
+        if (!isset($this->fileContentCache[$file])) {
             return $this->snippet_cache[$cache_key] = '';
         }
 
-        $lines = $files_cache[$file];
+        $lines = $this->fileContentCache[$file];
         $start = max(0, $line - $padding - 1);
         $end = min(count($lines), $line + $padding);
 
@@ -370,9 +361,10 @@ trait ErrorHandler
         return $path;
     }
 
-    private function prepareTraceModel(array $trace_data, string $file, int $line, bool $is_artificial_trace): array
+    private function prepareTraceModel(array $trace_data, string $file, int $line, Throwable $exception): array
     {
         $first_frame = $trace_data[0] ?? null;
+        $original_trace = $exception->getTrace();
 
         // Проверяем, существует ли первый кадр и является ли он вызовом обработчика
         // Дополнительно проверяем, является ли это внутренним вызовом (без файла)
@@ -384,45 +376,50 @@ trait ErrorHandler
 
         // Иногда основная точка ошибки не является первой в трейсе.
         // Добавляем ее в начало, если это не так.
-        if (!$is_artificial_trace && isset($trace_data[0])) {
+        if (!empty($original_trace) && isset($trace_data[0])) {
             $first_trace = $trace_data[0];
             if (($first_trace['file'] ?? '') !== $file || ($first_trace['line'] ?? 0) !== $line) {
                 array_unshift($trace_data, ['file' => $file, 'line' => $line]);
             }
         }
 
-        // Если включен режим короткого трейса, фильтруем системные файлы и файлы библиотеки для ВК
-        if ($this->short_trace) {
-            $trace_data = array_filter($trace_data, static function ($trace_item) {
-                if (!isset($trace_item['file'])) {
-                    // Всегда оставляем внутренние вызовы PHP, они могут быть важны.
-                    return true;
-                }
-                $normalized_path = str_replace('\\', '/', $trace_item['file']);
-                // Фильтруем все, что в /vendor/ или в /simplevk.../src/
-                return !preg_match(self::VENDOR_PATH_PATTERN, $normalized_path);
-            });
-        }
-
         $trace_model = [];
         foreach ($trace_data as $num => $data) {
             $file_path = $data['file'] ?? null;
-            $line_num = $data['line'] ?? null;
-            $is_internal = ($file_path === null || $line_num === null);
+            $is_internal = ($file_path === null);
+            $is_user_file = !$is_internal && !preg_match(self::VENDOR_PATH_PATTERN, str_replace('\\', '/', $file_path));
+
+            if ($this->short_trace) {
+                if (!$is_internal && !$is_user_file) {
+                    continue; // Это файл из vendor или либы, пропускаем
+                }
+
+                if ($is_internal) {
+                    // Internal-вызов оставляем, только если он был сделан из пользовательского кода
+                    $caller_frame = $trace_data[$num + 1] ?? null;
+                    if ($caller_frame && isset($caller_frame['file'])) {
+                        $caller_is_vendor = preg_match(self::VENDOR_PATH_PATTERN, str_replace('\\', '/', $caller_frame['file']));
+                        if ($caller_is_vendor) {
+                            continue; // Вызван из vendor или либы, пропускаем
+                        }
+                    } else {
+                        // Вызван другим internal-вызовом или нет вызывающего. Считаем мусором.
+                        continue;
+                    }
+                }
+            }
 
             $snippet_colored = '';
             $snippet_plain = '';
             if (!$is_internal) {
-                $snippet_colored = $this->getCodeSnippet($file_path, $line_num, 0, true);
-                $snippet_plain   = $this->getCodeSnippet($file_path, $line_num, 0, false);
+                $snippet_colored = $this->getCodeSnippet($file_path, $data['line'], 0, true);
+                $snippet_plain   = $this->getCodeSnippet($file_path, $data['line'], 0, false);
             }
-
-            $is_user_file = !$is_internal && !preg_match(self::VENDOR_PATH_PATTERN, str_replace('\\', '/', $file_path));
 
             $trace_model[] = [
                 'num' => $num,
                 'file' => $file_path,
-                'line' => $line_num,
+                'line' => $data['line'] ?? null,
                 'class' => $data['class'] ?? '',
                 'function' => $data['function'] ?? '{unknown function}',
                 'is_internal' => $is_internal,
