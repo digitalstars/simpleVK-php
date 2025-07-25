@@ -6,6 +6,7 @@ require_once('config_simplevk.php');
 
 use Closure;
 use DigitalStars\SimpleVK\Utils\EnvironmentDetector;
+use ErrorException;
 use Throwable, Exception;
 
 trait ErrorHandler
@@ -87,7 +88,6 @@ trait ErrorHandler
     public function exceptionHandler(
         Throwable $exception,
         int $set_type = E_ERROR,
-        bool $is_artificial_trace = false
     ): void {
         $message = $this->normalizeMessage($exception->getMessage());
         $message = $this->filterPaths($message);
@@ -102,7 +102,6 @@ trait ErrorHandler
             $line,
             $code,
             $exception,
-            $is_artificial_trace
         );
     }
 
@@ -116,14 +115,13 @@ trait ErrorHandler
         int $line,
         ?int $code = null,
         ?Throwable $exception = null,
-        bool $is_artificial_trace = false
     ): bool {
         // если ошибка не подавлена оператором @
         if (!(error_reporting() & $type)) {
             return true; // Не обрабатываем подавленные ошибки
         }
 
-        $trace_data = [];
+        $is_artificial_trace = false;
 
         if ($exception) {
             $trace_data = $exception->getTrace();
@@ -133,14 +131,13 @@ trait ErrorHandler
                 $is_artificial_trace = true;
             }
         } else {
-            $exception = new \ErrorException($message, 0, $type, $file, $line);
+            $exception = new ErrorException($message, 0, $type, $file, $line);
             $trace_data = $exception->getTrace();
             $is_artificial_trace = true;
         }
 
         // --- 2. Определение уровня и типа ошибки ---
         [$error_level, $error_type] = $this->defaultErrorLevelMap()[$type] ?? ['NOTICE', 'UNKNOWN'];
-        $error_level_str = $this->formatErrorLevel($error_level);
 
         $trace_model = $this->prepareTraceModel($trace_data, $file, $line, $is_artificial_trace);
 
@@ -178,11 +175,6 @@ trait ErrorHandler
         return true; // Подавляем стандартный обработчик PHP
     }
 
-    private function needsArtificialTrace(int $type, bool $is_already_artificial): bool
-    {
-        return !$is_already_artificial && in_array($type, self::NO_TRACE_ERROR_TYPES, true);
-    }
-
     private function shouldLogException(?Throwable $exception, ?int $code): bool
     {
         return !($exception instanceof SimpleVkException && in_array($code, ERROR_CODES_FOR_MANY_TRY, true));
@@ -205,13 +197,13 @@ trait ErrorHandler
         if ($error = error_get_last()) {
             $type = $error['type'];
             if ($type & DEFAULT_ERROR_LOG) {
-                $exception = new \ErrorException(
+                $exception = new ErrorException(
                     $error['message'],
                     0, // code
                     $error['type'],
                     $error['file'],
                     $error['line']
-                );;
+                );
                 $this->exceptionHandler($exception);
             }
         }
@@ -334,6 +326,7 @@ trait ErrorHandler
     private function normalizeMessage(string $message): string
     {
         return $message;
+        /*
         $message = preg_replace('/Array\s*\n?\s*\(/i', '[', $message);
 
         $message = str_replace(')', ']', $message);
@@ -365,6 +358,7 @@ trait ErrorHandler
         }
 
         return trim(implode("\n", $result));
+        */
     }
 
     private function filterPaths(string $path): string
@@ -381,13 +375,11 @@ trait ErrorHandler
         $first_frame = $trace_data[0] ?? null;
 
         // Проверяем, существует ли первый кадр и является ли он вызовом обработчика
-        if ($first_frame && ($first_frame['function'] ?? '') === 'userErrorHandler') {
-            // Дополнительно проверяем, является ли это внутренним вызовом (без файла)
-            // Это характерно именно для trigger_error
-            if (!isset($first_frame['file'])) {
-                // Удаляем этот бесполезный первый кадр
-                array_shift($trace_data);
-            }
+        // Дополнительно проверяем, является ли это внутренним вызовом (без файла)
+        // Это характерно именно для trigger_error
+        if ($first_frame && ($first_frame['function'] ?? '') === 'userErrorHandler' && !isset($first_frame['file'])) {
+            // Удаляем этот бесполезный первый кадр
+            array_shift($trace_data);
         }
 
         // Иногда основная точка ошибки не является первой в трейсе.
@@ -401,7 +393,7 @@ trait ErrorHandler
 
         // Если включен режим короткого трейса, фильтруем системные файлы и файлы библиотеки для ВК
         if ($this->short_trace) {
-            $trace_data = array_filter($trace_data, function ($trace_item) {
+            $trace_data = array_filter($trace_data, static function ($trace_item) {
                 if (!isset($trace_item['file'])) {
                     // Всегда оставляем внутренние вызовы PHP, они могут быть важны.
                     return true;
