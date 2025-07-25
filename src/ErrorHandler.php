@@ -19,6 +19,8 @@ trait ErrorHandler
 
     private bool $send_error_in_vk = true;
 
+    private array $snippet_cache = [];
+
     private bool $isAlreadyExiting = false;
 
     private const NO_TRACE_ERROR_TYPES = [
@@ -89,22 +91,13 @@ trait ErrorHandler
     ): void {
         $message = $this->normalizeMessage($exception->getMessage());
         $message = $this->filterPaths($message);
-        $message = $this->coloredLog($message, 'RED');
         $file = $this->normalizeMessage($exception->getFile());
-        $line = $this->normalizeMessage($exception->getLine());
+        $line = (int) $this->normalizeMessage($exception->getLine()); // Приведение к int для надежности
         $code = $exception->getCode();
-
-        $trace = $exception->getTrace();
-        if (empty($trace)) {
-            $trace = [
-                ['file' => $file, 'line' => $line, 'function' => 'Unknown function']
-            ];
-        }
-        $trace = $this->buildNewTrace($trace, $file, $line, $is_artificial_trace);
 
         $this->userErrorHandler(
             $set_type,
-            $message . "\n\n\n$trace",
+            $message,
             $file,
             $line,
             $code,
@@ -130,37 +123,51 @@ trait ErrorHandler
             return true; // Не обрабатываем подавленные ошибки
         }
 
-        // --- 1. Генерация полного трейса при ошибках без трейса ---
-        if ($this->needsArtificialTrace($type, $is_artificial_trace)) {
-            // Создаем исскуственный трейс для ошибки, не содержащей полного трейса
-            $artificialException = new Exception($message);
-            // Передаем оригинальный тип ошибки и получаем полный трейс
-            $this->exceptionHandler($artificialException, $type, true);
-            return true; // Выход, т.к. exceptionHandler вызовет userErrorHandler снова
+        $trace_data = [];
+
+        if ($exception) {
+            $trace_data = $exception->getTrace();
+
+            if (empty($trace_data)) {
+                $trace_data = [['file' => $file, 'line' => $line]];
+                $is_artificial_trace = true;
+            }
+        } else {
+            $exception = new \ErrorException($message, 0, $type, $file, $line);
+            $trace_data = $exception->getTrace();
+            $is_artificial_trace = true;
         }
 
         // --- 2. Определение уровня и типа ошибки ---
         [$error_level, $error_type] = $this->defaultErrorLevelMap()[$type] ?? ['NOTICE', 'UNKNOWN'];
         $error_level_str = $this->formatErrorLevel($error_level);
 
-        // --- 3. Форматирование и очистка сообщения ---
-        $color_msg = "$error_level_str$message";
-        $color_msg = str_replace("\n\n", "\n", $color_msg);
-        $clear_msg = preg_replace('/\033\[[0-9;]*m/', '', $color_msg); //Очистка от цвета
+        $trace_model = $this->prepareTraceModel($trace_data, $file, $line, $is_artificial_trace);
 
-        // --- 4. Вывод в консоль/веб ---
-        if ($exception) { // Выводим только если есть трейс (т.е. после exceptionHandler)
-            $this->displayError($color_msg, $clear_msg);
-        }
+        // 2. РЕНДЕРИНГ ТРЕЙСОВ
+        $console_trace = $this->renderTrace($trace_model, with_colors: true, shorten_paths: false);
+        $vk_trace = $this->renderTrace($trace_model, with_colors: false, shorten_paths: true);
+        $plain_trace = $this->renderTrace($trace_model, with_colors: false, shorten_paths: false);
 
-        // Исключение не является SimpleVkException ИЛИ, является,
-        // но его код НЕ входит в список для многократных попыток
+        // 3. ФОРМИРОВАНИЕ ЗАГОЛОВКОВ
+        $console_header = $this->formatErrorLevel($error_level) . $message;
+        $plain_header   = strip_tags(preg_replace('/\033\[[0-9;]*m/', '', $console_header));
+
+        // 4. СБОРКА ФИНАЛЬНЫХ СООБЩЕНИЙ
+        $console_message = "$console_header\n\n$console_trace";
+        $plain_message   = "$plain_header\n\n$plain_trace";
+        $vk_message      = "$plain_header\n\n$vk_trace";
+
+        // --- 4. Логирование ---
         if ($this->shouldLogException($exception, $code)) {
-            SimpleVkException::logCustomError($clear_msg);
+            SimpleVkException::logCustomError($vk_message);
         }
 
-        // отправка ошибки в чат
-        $this->dispatchErrorMessage($error_type, $clear_msg, $code, $exception);
+        // --- 5. Вывод в консоль/веб/лог ---
+        $this->displayError($console_message, $plain_message);
+
+        // --- 5. Отправка ошибки в чат ВК ---
+        $this->dispatchErrorMessage($error_type, $vk_message, $code, $exception);
 
         // Завершение работы при критических ошибках
         if (in_array($error_level, ['ERROR', 'CRITICAL'])) {
@@ -198,8 +205,14 @@ trait ErrorHandler
         if ($error = error_get_last()) {
             $type = $error['type'];
             if ($type & DEFAULT_ERROR_LOG) {
-                //запускаем обработчик ошибок
-                $this->userErrorHandler($type, $error['message'], $error['file'], $error['line']);
+                $exception = new \ErrorException(
+                    $error['message'],
+                    0, // code
+                    $error['type'],
+                    $error['file'],
+                    $error['line']
+                );;
+                $this->exceptionHandler($exception);
             }
         }
     }
@@ -275,8 +288,14 @@ trait ErrorHandler
         }
     }
 
-    protected function getCodeSnippet(string $file, int $line, int $padding = 0): string
+    protected function getCodeSnippet(string $file, int $line, int $padding = 0, bool $with_colors = true): string
     {
+        $cache_key = "$file:$line:$padding:" . ($with_colors ? 'color' : 'nocolor');
+
+        if (isset($this->snippet_cache[$cache_key])) {
+            return $this->snippet_cache[$cache_key];
+        }
+
         static $files_cache = [];
 
         if (!isset($files_cache[$file]) && is_readable($file)) {
@@ -284,34 +303,41 @@ trait ErrorHandler
         }
 
         if (!isset($files_cache[$file])) {
-            return false;
+            return $this->snippet_cache[$cache_key] = '';
         }
 
         $lines = $files_cache[$file];
         $start = max(0, $line - $padding - 1);
         $end = min(count($lines), $line + $padding);
-        $snippet = '';
 
-        for ($i = $start; $i < $end; $i++) {
-            $line_number = ($i + 1) . ': ';
-            $line_number = $this->coloredLog($line_number, 'YELLOW');
-            $code = $this->coloredLog(trim($lines[$i]), 'WHITE');
-            $snippet .= $line_number . $code . PHP_EOL;
+        if ($start >= $end) {
+            return $this->snippet_cache[$cache_key] = '';
         }
 
-        return $snippet;
+        $snippet_lines = [];
+        for ($i = $start; $i < $end; $i++) {
+            $line_number_text = ($i + 1) . ': ';
+            $code_text = trim($lines[$i]);
+
+            if ($with_colors) {
+                $line_number = $this->coloredLog($line_number_text, 'YELLOW');
+                $code = $this->coloredLog($code_text, 'WHITE');
+                $snippet_lines[] = $line_number . $code;
+            } else {
+                $snippet_lines[] = $line_number_text . $code_text;
+            }
+        }
+
+        return $this->snippet_cache[$cache_key] = implode(PHP_EOL, $snippet_lines) . PHP_EOL;
     }
 
     private function normalizeMessage(string $message): string
     {
         return $message;
-        // Шаг 1: Нормализуем запись Array (
         $message = preg_replace('/Array\s*\n?\s*\(/i', '[', $message);
 
-        // Шаг 2: Заменяем закрывающие скобки на "]"
         $message = str_replace(')', ']', $message);
 
-        // Шаг 3: Обрабатываем отступы
         $lines = explode("\n", $message);
 
         $result = [];
@@ -341,80 +367,6 @@ trait ErrorHandler
         return trim(implode("\n", $result));
     }
 
-    private function buildNewTrace(array $trace_data, string $file, int $line, bool $is_artificial_trace): string
-    {
-        $trace = '';
-
-        //при отсутствии изначального трейса или это user_error()
-        //трейс был создан искуственно
-        if ($is_artificial_trace) {
-            $first_trace = $trace_data[0] ?? null;
-            if ($first_trace
-                && !isset($first_trace['file'])
-                && $first_trace['function'] == 'userErrorHandler'
-                && $first_trace['class'] == 'DigitalStars\SimpleVK\SimpleVK') {
-                //поледний трейс идет из SimpleVK класса, потому что он использует трейт ErrorHandler
-                array_shift($trace_data); //удаляем userErrorHandler()
-            }
-        }
-
-        //добавляем строку ошибки в трейс на 0-е место
-        if (!$is_artificial_trace && isset($trace_data[0]) && ($trace_data[0]['file'] != $file || $trace_data[0]['line'] != $line)) {
-            array_unshift($trace_data, ['file' => $file, 'line' => $line]);
-        }
-
-        foreach ($trace_data as $num => $data) {
-            $trace .= $this->formatTraceLine($data, $num);
-        }
-
-        return $trace;
-    }
-
-    private function formatTraceLine(array $trace, int $num): string
-    {
-//        $type = $trace['type'] ?? '';
-        $function = $trace['function'] ?? '{unknown function}';
-        $class = $trace['class'] ?? '';
-//        $class = str_replace(["DigitalStars\DataBase\\", "DigitalStars\SimpleVK\\"], "", $class);
-//        $args = $trace['args'] ?? [];
-        $trace_line = '';
-        $file = $trace['file'] ?? 'unknown file';
-        $line = $trace['line'] ?? '?';
-
-        //[internal function]
-
-        $code_snippet = $this->getCodeSnippet($file, (int)$line);
-//        $pattern = '#/(vendor|simplevk[^/]*/src)(/.*)#i';
-
-        $formatted_file = $this->filterPaths($file);
-
-        if (isset($trace['file']) && preg_match(self::VENDOR_PATH_PATTERN, $formatted_file, $matches)) {
-            $formatted_file = ".." . $matches[0];
-            $user_file_marker = '';
-        } elseif (!isset($trace['file']) || !$code_snippet) {
-            $user_file_marker = '';
-        } else {
-            $user_file_marker = '➡ ';
-        }
-
-        // Если короткий трейс выключен или это не файл библиотеки
-        if (!$this->short_trace || !empty($user_file_marker)) {
-            if (!isset($trace['file']) && !isset($trace['line'])) {
-                $trace_line .= $this->coloredLog("$user_file_marker#$num ", 'GREEN')
-                    . $this->coloredLog('[internal function]', 'BLUE') . "\n"
-                    . $this->coloredLog("?:", 'YELLOW')
-                    . $this->coloredLog(" $class->$function()", 'WHITE') . "\n\n";
-            } else {
-                $trace_line .= $this->coloredLog("$user_file_marker#$num ", 'GREEN')
-                    . $this->coloredLog($formatted_file, 'BLUE')
-                    . $this->coloredLog(":$line", 'YELLOW') . "\n"
-                    . $this->coloredLog($code_snippet, 'WHITE') . "\n\n";
-            }
-        }
-
-        return $trace_line;
-    }
-
     private function filterPaths(string $path): string
     {
         $path = str_replace('\\', '/', $path);
@@ -423,14 +375,109 @@ trait ErrorHandler
         }
         return $path;
     }
-    /*
-    private function formatArgs(array $args) {
-        return implode(', ', array_map(static function ($arg) {
-            if(is_object($arg)) {
-                return get_class($arg);
+
+    private function prepareTraceModel(array $trace_data, string $file, int $line, bool $is_artificial_trace): array
+    {
+        $first_frame = $trace_data[0] ?? null;
+
+        // Проверяем, существует ли первый кадр и является ли он вызовом обработчика
+        if ($first_frame && ($first_frame['function'] ?? '') === 'userErrorHandler') {
+            // Дополнительно проверяем, является ли это внутренним вызовом (без файла)
+            // Это характерно именно для trigger_error
+            if (!isset($first_frame['file'])) {
+                // Удаляем этот бесполезный первый кадр
+                array_shift($trace_data);
+            }
+        }
+
+        // Иногда основная точка ошибки не является первой в трейсе.
+        // Добавляем ее в начало, если это не так.
+        if (!$is_artificial_trace && isset($trace_data[0])) {
+            $first_trace = $trace_data[0];
+            if (($first_trace['file'] ?? '') !== $file || ($first_trace['line'] ?? 0) !== $line) {
+                array_unshift($trace_data, ['file' => $file, 'line' => $line]);
+            }
+        }
+
+        // Если включен режим короткого трейса, фильтруем системные файлы и файлы библиотеки для ВК
+        if ($this->short_trace) {
+            $trace_data = array_filter($trace_data, function ($trace_item) {
+                if (!isset($trace_item['file'])) {
+                    // Всегда оставляем внутренние вызовы PHP, они могут быть важны.
+                    return true;
+                }
+                $normalized_path = str_replace('\\', '/', $trace_item['file']);
+                // Фильтруем все, что в /vendor/ или в /simplevk.../src/
+                return !preg_match(self::VENDOR_PATH_PATTERN, $normalized_path);
+            });
+        }
+
+        $trace_model = [];
+        foreach ($trace_data as $num => $data) {
+            $file_path = $data['file'] ?? null;
+            $line_num = $data['line'] ?? null;
+            $is_internal = ($file_path === null || $line_num === null);
+
+            $snippet_colored = '';
+            $snippet_plain = '';
+            if (!$is_internal) {
+                $snippet_colored = $this->getCodeSnippet($file_path, $line_num, 0, true);
+                $snippet_plain   = $this->getCodeSnippet($file_path, $line_num, 0, false);
             }
 
-            return is_array($arg) ? 'Array' : var_export($arg, true);
-        }, $args));
-    } */
+            $is_user_file = !$is_internal && !preg_match(self::VENDOR_PATH_PATTERN, str_replace('\\', '/', $file_path));
+
+            $trace_model[] = [
+                'num' => $num,
+                'file' => $file_path,
+                'line' => $line_num,
+                'class' => $data['class'] ?? '',
+                'function' => $data['function'] ?? '{unknown function}',
+                'is_internal' => $is_internal,
+                'is_user_file' => $is_user_file,
+                'snippet_colored' => $snippet_colored,
+                'snippet_plain' => $snippet_plain,
+            ];
+        }
+        return $trace_model;
+    }
+
+    /**
+     * Рендерит модель трейса в строку с заданными параметрами форматирования.
+     *
+     * @param array $trace_model Подготовленная модель трейса.
+     * @param bool $with_colors Добавлять ли ANSI-коды цветов.
+     * @param bool $shorten_paths Сокращать ли пути к файлам.
+     * @return string
+     */
+    private function renderTrace(array $trace_model, bool $with_colors, bool $shorten_paths): string
+    {
+        $trace_string = '';
+        foreach ($trace_model as $frame) {
+            $log = fn($text, $color) => $with_colors ? $this->coloredLog($text, $color) : $text;
+
+            if ($frame['is_internal']) {
+                $class_function = $frame['class'] ? "{$frame['class']}->{$frame['function']}()" : "{$frame['function']}()";
+                $trace_string .= $log("#{$frame['num']} ", 'GREEN')
+                    . $log('[internal function]', 'BLUE') . "\n"
+                    . $log("?: ", 'YELLOW')
+                    . $log($class_function, 'WHITE') . "\n\n";
+                continue;
+            }
+
+            $user_file_marker = $frame['is_user_file'] ? '➡ ' : '';
+            $file_path = $shorten_paths ? $this->filterPaths($frame['file']) : $frame['file'];
+
+            $header = $log("{$user_file_marker}#{$frame['num']} ", 'GREEN')
+                . $log($file_path, 'BLUE')
+                . $log(":{$frame['line']}", 'YELLOW');
+
+            // Выбираем нужный сниппет (цветной или простой)
+            $snippet = $with_colors ? $frame['snippet_colored'] : $frame['snippet_plain'];
+
+            $trace_string .= $header . "\n"
+                . ($snippet ? $log($snippet, 'WHITE') . "\n" : "\n");
+        }
+        return $trace_string;
+    }
 }
