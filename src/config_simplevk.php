@@ -2,7 +2,7 @@
 
 namespace DigitalStars\SimpleVK;
 
-const SIMPLEVK_VERSION = '3.8.2';
+const SIMPLEVK_VERSION = '3.8.3';
 // массив кодов ошибок ВК, при которых идет 5 попыток выполнить этот запрос с перерывом в 10 секунд
 const ERROR_CODES_FOR_MANY_TRY = [
     1, //Произошла неизвестная ошибка.
