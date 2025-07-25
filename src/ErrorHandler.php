@@ -187,7 +187,6 @@ trait ErrorHandler
             return;
         }
         if ($error = error_get_last()) {
-            var_dump($error);
             $type = $error['type'];
             if ($type & (E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_RECOVERABLE_ERROR)) {
                 $exception = new ErrorException(
@@ -232,7 +231,7 @@ trait ErrorHandler
         };
     }
 
-    private function coloredLog(string $text, string $color)
+    private function coloredLog(string $text, string $color): string
     {
         $color_codes = [
             'RED' => "\033[31m",
@@ -266,7 +265,7 @@ trait ErrorHandler
                         'dont_parse_links' => 1
                     ], use_placeholders: false);
                 } catch (Exception $e) {
-                    //$this->send_error_in_vk = false; //todo это проблема для longpoll
+                    //$this->send_error_in_vk = false; // это проблема для longpoll
                     trigger_error('Не удалось отправить ошибку в ЛС: ' . $e->getMessage(), E_USER_WARNING);
                 }
             }
