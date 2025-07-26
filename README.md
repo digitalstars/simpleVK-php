@@ -1,11 +1,20 @@
 <p align="center">
-  <img alt="SimpleVK logo" title="SimpleVK это PHP библиотека быстрой разработки ботов для VK.COM" src="http://images.vfl.ru/ii/1563283715/1c6a23fb/27226348.png"/>
+  <a href="https://simplevk.scripthub.ru/">
+    <img alt="Логотип SimpleVK" src="..."/>
+  </a>
+</p>
+
+<h1 align="center">PHP фреймворк для ботов VK</h1>
+
+<p align="center">
+  <strong>Мощная PHP библиотека для создания ботов ВКонтакте. Поддержка VK API, LongPoll, Callback, OAuth2, клавиатур и медиа.</strong>
 </p>
 
 <p align="center">
-<img src="https://img.shields.io/badge/VK_API-%205.139+-8992bb.svg" alt="VK api version">
-<img src="https://img.shields.io/github/v/release/digitalstars/simplevk?color=8992bb" alt="Last release">
-<img src="https://img.shields.io/packagist/l/digitalstars/simplevk" alt="License">
+<a href="https://packagist.org/packages/digitalstars/simplevk"><img src="https://img.shields.io/github/v/release/digitalstars/simplevk?color=8992bb" alt="Последний релиз"></a>
+<a href="https://vk.com/dev/versions"><img src="https://img.shields.io/badge/VK_API-5.139+-8992bb.svg" alt="Поддержка версий VK API"></a>
+<a href="https://packagist.org/packages/digitalstars/simplevk"><img src="https://img.shields.io/packagist/dt/digitalstars/simplevk.svg" alt="Всего установок"></a>
+<a href="https://github.com/digitalstars/simpleVK-php/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/digitalstars/simplevk" alt="Лицензия"></a>
 </p> 
 
 > Документация находится в процессе создания.
@@ -30,22 +39,20 @@ SimpleVK - это фреймворк для создания ботов. Вам 
 * Генераторы запросов с offset
 * Автоматическое разбитие длинных сообщений при отправке
 
-## Поддержка
-* `Callback API`
-* `User Long Poll API`
-* `Bots Long Poll API`
-* `Streaming API`
-* Карусели и все виды кнопок
-* Создание ботов на группах / пользователях
-* Работа с голосовыми сообщениями, документами и другими медиа-файлами
+## ✅ Полная поддержка VK API
+- **Long Poll API** (для User и Bots)
+- **Callback API**
+- **Streaming API**
+- **Загрузка медиа:** Фото, видео, документы, голосовые сообщения
+- **Клавиатуры:** Inline, прикрепленные, карусели
+- **Кнопки:** Текстовые, callback, URL, оплата, геолокация
+- **Авторизация (OAuth):** Упрощенная работа с токенами.
 
-## Автоматическое решение проблем VK API
-* Игнорирование дублирующихся событий (по event_id)
-* Игнорирование повторных событий при долгой обработке события от VK
-* Автоматическое закрытие соединения с ВК после получения события
-* Отправка повторных запросов при недоступности серверов / API
-* Отправка повторных запросов при некоторых ошибках VK API
-* Обработка невалидных JSON
+## Надежность и автоматизация "из коробки"
+Вам не нужно думать о типичных проблемах VK API — библиотека решает их автоматически.
+* **Защита от дублей:** Игнорирование дублирующихся событий и повторных событий при долгой обработке.
+* **Стабильность соединения:** Автоматические повторные запросы при недоступности серверов или временных ошибках API.
+* **Корректность данных:** Встроенная обработка невалидных JSON и других ошибок API
 
 # Подключение
 ### Используя composer
