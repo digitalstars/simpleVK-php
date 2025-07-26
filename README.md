@@ -55,23 +55,10 @@
 * **Корректность данных:** Встроенная обработка невалидных JSON и других ошибок API
 * **Разбитие длинных сообщений:** Красиво разбивает сообщения выше 4096 символов на несколько частей.
 
-# Подключение
+## Установка
 ### Используя composer
-1\. Установить
 ```bash
 composer require digitalstars/simplevk:~3.0
-```
-
-2\. Подключить `autoload.php`
-```php
-require_once __DIR__.'/vendor/autoload.php';
-```
-### Вручную
-1. Скачать последний релиз c [github](https://github.com/digitalstars/simplevk/tree/testing)
-2. Подключить `autoload.php`.  
-> Вот так будет происходить подключение, если ваш бот находится в той же папке, что и папка `simplevk-testing`
-```php
-require_once "simplevk-testing/autoload.php";
 ```
 
 ## Проверка готовности сервера
@@ -84,13 +71,8 @@ require_once __DIR__.'/vendor/autoload.php';
 > Если вы делаете longpoll бота, то запускайте диагностику через консоль  
 > Если вы делаете callback бота, то запускайте диагностику через браузер
 
-### Примерный вывод диагностики:
-<p align="left">
-  <img src="http://images.vfl.ru/ii/1608248228/eea9ef11/32696142.jpg"/>
-</p>
-
 ## Примеры ботов
-### Вызов метода апи
+### Вызов метода VK API
 ```php
 <?php
 require_once __DIR__.'/vendor/autoload.php';
