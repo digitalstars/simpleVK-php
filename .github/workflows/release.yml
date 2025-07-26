@@ -25,27 +25,38 @@ jobs:
       - name: 3. Установка зависимостей (composer install)
         run: composer install --no-dev --optimize-autoloader
 
-      # Внедряем вызов PackagistReporter в src/Compatibility.php
-      - name: 4. Внедрение кода для отправки статистики
+      - name: 4. Создание и подготовка директории для сборки
         run: |
-          REPORTER_CODE='// Активация репортера для CI-сборки\nif (is_file(__DIR__ . \"/Utils/PackagistReporter.php\")) {\n    require_once __DIR__ . \"/Utils/PackagistReporter.php\";\n    \\DigitalStars\\SimpleVK\\Utils\\PackagistReporter::checkAndReport();\n}'
-          sed -i '4a\'"$REPORTER_CODE" src/Compatibility.php
+          # Создаем чистую папку для нашего релиза
+          mkdir release_build
+          mkdir -p release_build/vendor/digitalstars/simplevk
+          cp -r src bin autoload.php release_build/vendor/digitalstars/simplevk/
+          cp -r vendor/* release_build/vendor/
+          cp LICENSE release_build/
 
-      - name: 5. Подготовка к архивации
+      # Внедряем вызов PackagistReporter в файл Compatibility.php, который уже лежит в папке для сборки
+      - name: 5. Внедрение кода для отправки статистики
+        run: |
+          REPORTER_PATH="release_build/vendor/digitalstars/simplevk/src/Compatibility.php"
+          REPORTER_CODE='// Активация репортера для CI-сборки\nif (is_file(__DIR__ . \"/Utils/PackagistReporter.php\")) {\n    require_once __DIR__ . \"/Utils/PackagistReporter.php\";\n    \\DigitalStars\\SimpleVK\\Utils\\PackagistReporter::checkAndReport();\n}'
+          # Вставляем код после 4-й строки (после use ...)
+          sed -i '4a\'"$REPORTER_CODE" "$REPORTER_PATH"
+
+      - name: 6. Подготовка к архивации
         id: prep
         run: |
-          VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
-          echo "RELEASE_VERSION=${VERSION}" >> $GITHUB_ENV
+          # Готовим имя для будущего архива
           echo "ARCHIVE_NAME=SimpleVK-${{ github.event.release.tag_name }}.zip" >> $GITHUB_ENV
 
-      # Создаем ZIP-архив со всеми файлами
-      # -r: рекурсивно добавить все файлы и папки
-      # -x: исключить файлы и папки, которые не нужны в финальном архиве (git, CI-файлы и т.д.)
-      - name: 6. Создание ZIP-архива
+      # Создаем ZIP-архив из содержимого подготовленной папки release_build
+      - name: 7. Создание ZIP-архива
         run: |
-          zip -r ${{ env.ARCHIVE_NAME }} . -x ".git/*" ".github/*" ".gitignore" "composer.json" "composer.lock" "psalm.xml" "README.md"
+          # Переходим в директорию сборки, чтобы в архиве не было родительской папки release_build
+          cd release_build
+          # Архивируем всё её содержимое
+          zip -r ../${{ env.ARCHIVE_NAME }} .
 
-      - name: 7. Загрузка архива в релиз
+      - name: 8. Загрузка архива в релиз
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
