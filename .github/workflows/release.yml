@@ -20,26 +20,42 @@ jobs:
           extensions: mbstring, curl, json
           tools: composer:v2
 
-      # --no-dev: не устанавливать пакеты для разработки (типа phpunit, psalm)
-      # --optimize-autoloader: создает оптимизированный автозагрузчик для лучшей производительности
-      - name: 3. Установка зависимостей (composer install)
-        run: composer install --no-dev --optimize-autoloader
+      # --- НОВАЯ, ИСПРАВЛЕННАЯ ЛОГИКА СБОРКИ ---
 
-      - name: 4. Создание и подготовка директории для сборки
+      - name: 3. Создание финальной структуры проекта
         run: |
           # Создаем чистую папку для нашего релиза
           mkdir release_build
+          
+          # Копируем код самой библиотеки в её "пакет" внутри будущей папки vendor
+          # Это будет наш "локальный репозиторий"
           mkdir -p release_build/vendor/digitalstars/simplevk
-          cp -r src bin autoload.php release_build/vendor/digitalstars/simplevk/
-          cp -r vendor/* release_build/vendor/
+          # Используем rsync для чистого копирования, исключая ненужные файлы
+          rsync -av --progress . release_build/vendor/digitalstars/simplevk/ --exclude ".git" --exclude ".github" --exclude "release_build"
+          
+          # Копируем файл лицензии в корень сборки
           cp LICENSE release_build/
+          
+          # Создаем временный composer.json в корне сборки, чтобы установить зависимости
+          # Он говорит Composer: "Установи digitalstars/simplevk, который лежит в локальной папке"
+          echo '{"name": "digitalstars/simplevk-release","description": "Release package for SimpleVK","repositories": [{"type": "path","url": "vendor/digitalstars/simplevk"}],"require": {"digitalstars/simplevk": "*"}}' > release_build/composer.json
 
-      # Внедряем вызов PackagistReporter в файл Compatibility.php, который уже лежит в папке для сборки
+      # --optimize-autoloader: создает оптимизированный автозагрузчик для лучшей производительности
+      - name: 4. Установка зависимостей в правильную структуру
+        run: |
+          # Переходим в папку сборки и запускаем composer install
+          # Теперь Composer сгенерирует autoload.php с ПРАВИЛЬНЫМИ путями
+          cd release_build
+          composer install --no-dev --optimize-autoloader
+          
+          # Удаляем временные файлы, которые не нужны в финальном архиве
+          rm composer.json composer.lock
+
+      # Внедряем вызов PackagistReporter в файл Compatibility.php уже после всех установок
       - name: 5. Внедрение кода для отправки статистики
         run: |
           REPORTER_PATH="release_build/vendor/digitalstars/simplevk/src/Compatibility.php"
-          REPORTER_CODE='// Активация репортера для CI-сборки\nif (is_file(__DIR__ . \"/Utils/PackagistReporter.php\")) {\n    require_once __DIR__ . \"/Utils/PackagistReporter.php\";\n    \\DigitalStars\\SimpleVK\\Utils\\PackagistReporter::checkAndReport();\n}'
-          # Вставляем код после 4-й строки (после use ...)
+          REPORTER_CODE='// Активация репортера для CI-сборки. Вызывается только в релизных архивах.\n\\DigitalStars\\SimpleVK\\Utils\\PackagistReporter::checkAndReport();'
           sed -i '4a\'"$REPORTER_CODE" "$REPORTER_PATH"
 
       - name: 6. Подготовка к архивации
