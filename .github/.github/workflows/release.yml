@@ -1,0 +1,56 @@
+name: Сборка и публикация релиза
+
+# Триггер: запускать этот рабочий процесс только при создании нового релиза
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Получение исходного кода
+        uses: actions/checkout@v4
+
+      - name: 2. Настройка PHP и Composer
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, curl, json
+          tools: composer:v2
+
+      # --no-dev: не устанавливать пакеты для разработки (типа phpunit, psalm)
+      # --optimize-autoloader: создает оптимизированный автозагрузчик для лучшей производительности
+      - name: 3. Установка зависимостей (composer install)
+        run: composer install --no-dev --optimize-autoloader
+
+      # Внедряем вызов PackagistReporter в src/Compatibility.php
+      - name: 4. Внедрение кода для отправки статистики
+        run: |
+          REPORTER_CODE='// Активация репортера для CI-сборки\nif (is_file(__DIR__ . \"/Utils/PackagistReporter.php\")) {\n    require_once __DIR__ . \"/Utils/PackagistReporter.php\";\n    \\DigitalStars\\SimpleVK\\Utils\\PackagistReporter::checkAndReport();\n}'
+          sed -i '4a\'"$REPORTER_CODE" src/Compatibility.php
+
+      - name: 5. Подготовка к архивации
+        id: prep
+        run: |
+          VERSION=$(echo "${{ github.event.release.tag_name }}" | sed 's/^v//')
+          echo "RELEASE_VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "ARCHIVE_NAME=SimpleVK-${{ github.event.release.tag_name }}.zip" >> $GITHUB_ENV
+
+      # Создаем ZIP-архив со всеми файлами
+      # -r: рекурсивно добавить все файлы и папки
+      # -x: исключить файлы и папки, которые не нужны в финальном архиве (git, CI-файлы и т.д.)
+      - name: 6. Создание ZIP-архива
+        run: |
+          zip -r ${{ env.ARCHIVE_NAME }} . -x ".git/*" ".github/*" ".gitignore" "composer.json" "composer.lock" "psalm.xml" "README.md"
+
+      - name: 7. Загрузка архива в релиз
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./${{ env.ARCHIVE_NAME }}
+          asset_name: ${{ env.ARCHIVE_NAME }}
+          asset_content_type: application/zip
