@@ -1,6 +1,6 @@
 {
     "name": "digitalstars/simplevk",
-    "description": "Framework for creating VK.com bots and working with VK API",
+    "description": "Powerful PHP library/framework for VK API bots, supporting LongPoll & Callback & OAuth",
     "license": "MIT",
     "support": {
         "issues": "https://github.com/digitalstars/simpleVK-php/issues",
@@ -8,15 +8,27 @@
         "docs": "https://simplevk.scripthub.ru/"
     },
     "keywords": [
+        "php",
         "vk",
+        "vkontakte",
         "vk.com",
+        "api",
         "vk-api",
-        "vk-bot",
-        "bot",
+        "wrapper",
+        "sdk",
         "framework",
+        "library",
+        "client",
+        "bot",
+        "chatbot",
+        "vk-bot",
         "longpoll",
-        "callback-api",
-        "simplevk"
+        "callback",
+        "auth",
+        "oauth",
+        "posting",
+        "keyboard",
+        "buttons"
     ],
     "minimum-stability": "beta",
     "prefer-stable": true,
