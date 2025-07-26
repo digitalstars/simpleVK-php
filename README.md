@@ -14,21 +14,18 @@
 <a href="https://packagist.org/packages/digitalstars/simplevk"><img src="https://img.shields.io/github/v/release/digitalstars/simplevk?color=8992bb" alt="Последний релиз"></a>
 <a href="https://vk.com/dev/versions"><img src="https://img.shields.io/badge/VK_API-5.139+-8992bb.svg" alt="Поддержка версий VK API"></a>
 <a href="https://packagist.org/packages/digitalstars/simplevk"><img src="https://img.shields.io/packagist/dt/digitalstars/simplevk.svg" alt="Всего установок"></a>
-<a href="https://github.com/digitalstars/simpleVK-php/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/digitalstars/simplevk" alt="Лицензия"></a>
-</p> 
+<a href="https://github.com/digitalstars/simpleVK-php/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/digitalstars/simplevk" alt="Лицензия"></a><br>
+<a href="https://simplevk.scripthub.ru/"><img src="https://img.shields.io/badge/-Документация-blue?style=flat&logo=gitbook&logoColor=white" alt="Документация"></a>
+<a href="https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt"><img src="https://img.shields.io/badge/-Чат_в_VK-4680C2?style=flat&logo=vk&logoColor=white" alt="Чат в VK"></a>
+<a href="https://t.me/your_telegram_channel"><img src="https://img.shields.io/badge/-Чат_в_Telegram-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Чат в Telegram"></a>
+</p>
 
 > Документация находится в процессе создания.
 
-[Документация на русском](https://simplevk.scripthub.ru/)
---- |  
-
-[Беседа VK](https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt) |
---- |  
-
-# Почему SimpleVK?
-SimpleVK - это фреймворк для создания ботов. Вам потребуется минимум кода и времени, благодаря встроенному конструктору и реализации готовых модулей и функций для работы с VK API.
-
 ## Функционал
+
+Помимо полной поддержки VK API, **SimpleVK** предоставляет высокоуровневые инструменты, которые берут на себя рутину и ускоряют разработку.
+
 * Модуль рассылки по диалогам и беседам
 * Конструктор ботов
 * Модуль обработки команд с помощью регулярных выражений и placeholder'ов
@@ -39,7 +36,10 @@ SimpleVK - это фреймворк для создания ботов. Вам 
 * Генераторы запросов с offset
 * Автоматическое разбитие длинных сообщений при отправке
 
-## ✅ Полная поддержка VK API
+## Полная поддержка VK API
+
+**SimpleVK** предоставляет удобный доступ ко всем стандартным элементам VK API
+
 - **Long Poll API** (для User и Bots)
 - **Callback API**
 - **Streaming API**
@@ -49,9 +49,9 @@ SimpleVK - это фреймворк для создания ботов. Вам 
 - **Авторизация (OAuth):** Упрощенная работа с токенами.
 
 ## Надежность и автоматизация "из коробки"
-Вам не нужно думать о типичных проблемах VK API — библиотека решает их автоматически.
+Вам не нужно думать о типичных проблемах VK API — **SimpleVK** решает их автоматически.
 * **Защита от дублей:** Игнорирование дублирующихся событий и повторных событий при долгой обработке.
-* **Стабильность соединения:** Автоматические повторные запросы при недоступности серверов или временных ошибках API.
+* **Стабильность соединения:** Повторные запросы при ошибках сети и сбоях/лимитах API.
 * **Корректность данных:** Встроенная обработка невалидных JSON и других ошибок API
 
 # Подключение
