@@ -24,8 +24,6 @@
 <a href="https://t.me/your_telegram_channel"><img src="https://img.shields.io/badge/-Чат_в_Telegram-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Чат в Telegram"></a>
 </p>
 
-> Документация находится в процессе создания.
-
 ## Функционал
 
 Помимо полной поддержки VK API, **SimpleVK** предоставляет высокоуровневые инструменты, которые берут на себя рутину и ускоряют разработку.
