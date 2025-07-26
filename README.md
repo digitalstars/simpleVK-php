@@ -21,7 +21,7 @@
 <a href="https://github.com/digitalstars/simpleVK-php/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/digitalstars/simplevk" alt="Лицензия"></a><br>
 <a href="https://simplevk.scripthub.ru/"><img src="https://img.shields.io/badge/-Документация-blue?style=flat&logo=gitbook&logoColor=white" alt="Документация"></a>
 <a href="https://vk.me/join/AJQ1dzQRUQxtfd7zSm4STOmt"><img src="https://img.shields.io/badge/-Чат_в_VK-4680C2?style=flat&logo=vk&logoColor=white" alt="Чат в VK"></a>
-<a href="https://t.me/your_telegram_channel"><img src="https://img.shields.io/badge/-Чат_в_Telegram-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Чат в Telegram"></a>
+<a href="https://t.me/+98OeLz7uZowwYjYy"><img src="https://img.shields.io/badge/-Чат_в_Telegram-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Чат в Telegram"></a>
 </p>
 
 ## Уникальные преимущества и возможности
