@@ -1,9 +1,9 @@
 <p align="center">
   <a href="https://simplevk.scripthub.ru/">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/digitalstars/simpleVK-php/refs/heads/master/.github/assets/logo-dark.png">
-      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/digitalstars/simpleVK-php/refs/heads/master/.github/assets/logo-light.png">
-      <img alt="Логотип SimpleVK" src="https://raw.githubusercontent.com/digitalstars/simpleVK-php/refs/heads/master/.github/assets/logo-light.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/digitalstars/simpleVK-php/master/.github/assets/logo-dark.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/digitalstars/simpleVK-php/master/.github/assets/logo-light.png">
+      <img alt="Логотип SimpleVK" src="https://raw.githubusercontent.com/digitalstars/simpleVK-php/master/.github/assets/logo-light.png">
     </picture>
   </a>
 </p>
