@@ -1,6 +1,10 @@
 <p align="center">
   <a href="https://simplevk.scripthub.ru/">
-    <img alt="Логотип SimpleVK" src="http://images.vfl.ru/ii/1563283715/1c6a23fb/27226348.png"/>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/digitalstars/simpleVK-php/main/.github/assets/logo-dark.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/digitalstars/simpleVK-php/main/.github/assets/logo-light.png">
+      <img alt="Логотип SimpleVK" src="https://raw.githubusercontent.com/digitalstars/simpleVK-php/main/.github/assets/logo-light.png">
+    </picture>
   </a>
 </p>
 
