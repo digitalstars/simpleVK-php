@@ -1,13 +1,13 @@
 <p align="center">
   <a href="https://simplevk.scripthub.ru/">
-    <img alt="Логотип SimpleVK" src="..."/>
+    <img alt="Логотип SimpleVK" src="http://images.vfl.ru/ii/1563283715/1c6a23fb/27226348.png"/>
   </a>
 </p>
 
 <h1 align="center">PHP фреймворк для ботов VK</h1>
 
 <p align="center">
-  <strong>Мощная PHP библиотека для создания ботов ВКонтакте. Поддержка VK API, LongPoll, Callback, OAuth2, клавиатур и медиа.</strong>
+  <strong>Мощная PHP библиотека для создания ботов ВКонтакте.<br>Поддержка VK API, LongPoll, Callback, OAuth2, клавиатур и медиа.</strong>
 </p>
 
 <p align="center">
