@@ -17,7 +17,7 @@ final class PackagistReporter
 {
     private const LIBRARY_VERSION = SIMPLEVK_VERSION;
 
-    private const VENDOR_PATH = __DIR__ . '/../../vendor';
+    private const VENDOR_PATH = __DIR__ . '/../../../../../vendor';
 
     /**
      * Проверяет, нужно ли отправлять отчет для текущей версии, и если да,
