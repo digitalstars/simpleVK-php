@@ -33,9 +33,6 @@ jobs:
           # Используем rsync для чистого копирования, исключая ненужные файлы
           rsync -av --progress . release_build/vendor/digitalstars/simplevk/ --exclude ".git" --exclude ".github" --exclude "release_build"
           
-          # Копируем файл лицензии в корень сборки
-          cp LICENSE release_build/
-          
           # Создаем временный composer.json в корне сборки, чтобы установить зависимости
           # Он говорит Composer: "Установи digitalstars/simplevk, который лежит в локальной папке"
           echo '{"name": "digitalstars/simplevk-release","description": "Release package for SimpleVK","repositories": [{"type": "path","url": "vendor/digitalstars/simplevk"}],"require": {"digitalstars/simplevk": "*"}}' > release_build/composer.json
