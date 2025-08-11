@@ -97,10 +97,11 @@ class SimpleVK {
 
         if (isset($this->data['type']) && $this->data['type'] != 'confirmation') {
             if (self::$debug_mode) {
-                $this->debugRun();
+                ini_set('display_errors', 1);
+                ini_set('error_reporting', E_ALL);
             } else {
                 $this->sendOK();
-                self::$debug_mode = true;
+                $this->setupBackgroundProcessing();
             }
 
             $is_dublicated = UniqueEventHandler::addEventToCache($this->data);
@@ -977,38 +978,109 @@ class SimpleVK {
         return $url === '' ? false : $url;
     }
 
-    protected function debugRun() {
-        ini_set('error_reporting', E_ALL);
-        ini_set('display_errors', 1);
-        ini_set('display_startup_errors', 1);
+    protected function setupBackgroundProcessing() {
+        error_reporting(E_ALL);
+        // ОТКЛЮЧАЕМ вывод ошибок в браузер/stdout.
+        ini_set('display_errors', '0');
+        ini_set('display_startup_errors', '0');
+
+        // ВКЛЮЧАЕМ логирование ошибок в системный лог или файл.
+        // ErrorHandler может это переопределить при использовании
+        ini_set('log_errors', '1');
     }
 
-    protected function sendOK() {
-        set_time_limit(0);
-        ini_set('display_errors', 'Off');
-        if (ob_get_contents())
-            ob_end_clean();
-
-        // для Nginx
-        if (is_callable('fastcgi_finish_request')) {
-            echo 'ok';
-            session_write_close();
-            fastcgi_finish_request();
-            $this->debugRun();
-            return True;
+    /**
+     * Отправляет клиенту ответ "ok", пытается завершить соединение и продолжить выполнение скрипта в фоне.
+     * Этот метод спроектирован для максимальной надежности в различных серверных окружениях.
+     *
+     * @return bool Возвращает `true`, если удалось использовать нативный механизм (FPM/LiteSpeed) для гарантированного
+     *              завершения соединения. Возвращает `false`, если использовался fallback-метод, который не дает
+     *              100% гарантии фонового выполнения (например, в cgi-fcgi или mod_php).
+     */
+    protected function sendOK(): bool
+    {
+        if (PHP_SAPI === 'cli') {
+            return true; // В консоли просто считаем, что задача выполнена.
         }
-        // для Apache
-        ignore_user_abort(true);
 
-        ob_start();
-        header('Content-Encoding: none');
+        // Не были ли заголовки уже отправлены где-то в коде ранее.
+        // Если заголовки отправлены, мы уже не можем управлять ими (менять статус, Content-Length и т.д.).
+        if (headers_sent()) {
+            echo 'ok';
+            if (function_exists('fastcgi_finish_request')) {
+                @fastcgi_finish_request();
+            }
+            @ob_flush();
+            @flush();
+            // Включаем поглотитель, чтобы дальнейший мусор не ушел в "сломанное" соединение.
+            ob_start(static fn() => '');
+            return false;
+        }
+
+        @set_time_limit(0);
+        // Указываем PHP продолжать выполнение скрипта, даже если пользователь (клиент) разорвал соединение.
+        @ignore_user_abort(true);
+
+        // Принудительно отключаем Gzip-сжатие на уровне PHP. Если оно включено, сервер будет
+        // буферизировать ВЕСЬ вывод, чтобы сжать его, что полностью сломает `flush()`.
+        @ini_set('zlib.output_compression', '0');
+
+        // Дополнительная директива для Apache (mod_php), чтобы отключить сжатие.
+        if (function_exists('apache_setenv')) {
+            @apache_setenv('no-gzip', 1);
+        }
+
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            @session_write_close();
+        }
+
+        // Гарантированно уничтожает ВСЕ буферы вывода, которые могли быть запущены ранее
+        // Это гарантирует, что перед отправкой нашего ответа вывод абсолютно чист.
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+
+        http_response_code(200);
         header('Content-Length: 2');
-        header('Connection: close');
+
+        $isHttp2 = isset($_SERVER['SERVER_PROTOCOL']) && str_starts_with($_SERVER['SERVER_PROTOCOL'], 'HTTP/2');
+        if (!$isHttp2) {
+            header('Connection: close');
+        }
+
+        // Специальные заголовки для управления прокси-серверами
+        header('Content-Type: text/plain; charset=utf-8');
+        header('X-Accel-Buffering: no');   // Команда для Nginx не буферизировать ответ.
+        header('X-Accel-Expires: 0');     // Команда для Nginx не кешировать ответ.
+
+        // Стандартные заголовки для запрета кеширования на всех уровнях (браузер, прокси).
+        header('Cache-Control: no-store, no-cache, must-revalidate, no-transform');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
         echo 'ok';
-        ob_end_flush();
-        flush();
-        $this->debugRun();
-        return True;
+
+        $finished = false;
+
+        // Проверяем наличие нативных функций для "отсоединения". Это лучший и самый надежный способ.
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+            $finished = true;
+        } elseif (function_exists('litespeed_finish_request')) {
+            \litespeed_finish_request();
+            $finished = true;
+        }
+
+        // Не дает гарантии, но это лучшее, что можно сделать в таких окружениях, как mod_php.
+        if (!$finished) {
+            @ob_flush();
+            @flush();
+        }
+
+        // Включаем поглотитель, чтобы дальнейший мусор не ушел в "сломанное" соединение.
+        ob_start(static fn() => '');
+
+        return $finished;
     }
 
     protected function processAuth($token, $version, $also_version) {

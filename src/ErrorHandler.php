@@ -38,12 +38,14 @@ trait ErrorHandler
         $this->user_error_handler_or_ids = is_numeric($ids) ? [$ids] : $ids;
 
         ini_set('error_reporting', E_ALL);
-        ini_set('display_errors', 1);
-        //при включении log_errors по умолчанию вывод идет в stderr, что приводит к дубрированию ошибок
-        ini_set('log_errors', 0);
+
         // Перенаправляет ошибки в файл, а не в stderr
         // ini_set('error_log', '/path/to/php-error.log');
-        ini_set('display_startup_errors', 1);
+
+        // Отключаем стандартные механизмы PHP, так как либа полностью берет их на себя.
+        ini_set('display_errors', 0);
+        ini_set('display_startup_errors', 0);
+        ini_set('log_errors', 0); // Либа логирует сама, поэтому отключаем стандартное логирование.
 
         set_error_handler([$this, 'userErrorHandler']); //Для пользовательских ошибок и всех нефатальных
         set_exception_handler([$this, 'exceptionHandler']); //Для необработанных исключений
