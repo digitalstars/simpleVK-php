@@ -24,7 +24,7 @@
 <a href="https://t.me/+98OeLz7uZowwYjYy"><img src="https://img.shields.io/badge/-Чат_в_Telegram-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Чат в Telegram"></a>
 </p>
 
-## Уникальные преимущества и возможности
+## Ключевые особенности
 
 Помимо полной поддержки VK API, **SimpleVK** предоставляет высокоуровневые инструменты и архитектурные решения, которые кардинально ускоряют и упрощают разработку.
 
@@ -46,13 +46,13 @@
 - **Загрузка медиа:** Фото, видео, документы, голосовые сообщения
 - **Клавиатуры:** Inline, прикрепленные, карусели
 - **Кнопки:** Текстовые, callback, URL, оплата, геолокация
-- **Авторизация (OAuth):** Упрощенная работа с токенами.
+- **Авторизация (OAuth):** Упрощенная работа с токенами
 
-## Надежность и автоматизация "из коробки"
+## Надежность и автоматизация из коробки
 Вам не нужно думать о типичных проблемах VK API — **SimpleVK** решает их автоматически.
 * **Защита от дублей:** Игнорирование дублирующихся событий и повторных событий при долгой обработке.
-* **Стабильность соединения:** Повторные запросы при ошибках сети и сбоях/лимитах API.
-* **Корректность данных:** Встроенная обработка невалидных JSON и других ошибок API
+* **Стабильность соединения:** Повторные запросы к API при ошибках сети и сбоях/лимитах API.
+* **Корректность данных:** Встроенная обработка невалидных JSON и других ошибок API.
 * **Разбитие длинных сообщений:** Красиво разбивает сообщения выше 4096 символов на несколько частей.
 
 ## Установка через Composer (Рекомендуемый)
@@ -61,56 +61,47 @@
 composer require digitalstars/simplevk
 ```
 
-## Установка из архива (без Composer)
+## Установка из архива
 
 Для окружений, где невозможно использовать Composer.
 
-1. Скачайте ZIP-архив SimpleVK-vX.Y.Z.zip со [страницы релизов](https://github.com/digitalstars/simpleVK-php/releases) из раздела "Assets"
-2. Распакуйте его в ваш проект. Папка vendor уже содержит всё необходимое.
+1. Скачайте ZIP-архив `SimpleVK-vX.Y.Z.zip` из раздела Assets [последнего релиза](https://github.com/digitalstars/simpleVK-php/releases) 
+2. Распакуйте его в ваш проект. Папка `vendor` уже содержит всё необходимое.
 
 ## Проверка готовности сервера
-Чтобы убедится, что вы установили все правильно, и ваш сервер готов к работе с SimpleVK, необходимо создать и запустить следующий скрипт:
+Чтобы убедиться, что ваше серверное окружение настроено правильно, SimpleVK предоставляет диагностический скрипт.
+Создайте файл со следующим кодом и запустите его:
 ```php
 <?php
-require_once __DIR__.'/vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 \DigitalStars\SimpleVK\Diagnostics::run();
 ```
-> Если вы делаете longpoll бота, то запускайте диагностику через консоль  
-> Если вы делаете callback бота, то запускайте диагностику через браузер
+**Важно:** Запускайте скрипт в той же среде, где будет работать ваш бот.
+- **Callback бот?** — Откройте скрипт в браузере.
+- **LongPoll бот?** — Выполните скрипт через консоль (CLI).
 
-## Примеры ботов
+## Быстрый старт
 ### Вызов метода VK API
 ```php
 <?php
-require_once __DIR__.'/vendor/autoload.php';
-use DigitalStars\SimpleVK\SimpleVK as vk;
-$vk = vk::create(ТОКЕН, '5.199'); 
-//возвращает сразу по ключу response из ответа
-$msg_id = $vk->request('messages.send', [
-    'peer_ids' => 1, 
-    'message' => 'Привет, ~!fn~', 
-    'random_id' => 0
+require_once __DIR__ . '/vendor/autoload.php';
+use DigitalStars\SimpleVK\SimpleVK;
+$vk = SimpleVK::create(ТОКЕН, '5.199'); 
+//возвращает сразу по ключу 'response' из ответа
+$data = $vk->request('users.get', [
+    'user_ids' => 1,
+    'fields' => ['screen_name']
 ]);
 ```
 
-### Минимальный Callback
-> Бот отвечает на любое сообщение
-
-```php
-<?php
-require_once __DIR__.'/vendor/autoload.php';
-use DigitalStars\SimpleVK\SimpleVK as vk;
-$vk = vk::create(ТОКЕН, '5.199')->setConfirm(STR); //STR - строка подтверждения сервера
-$vk->msg('Привет, ~!fn~')->send();
-```
 ### Простой Callback
 
 ```php
 <?php
-require_once __DIR__.'/vendor/autoload.php';
-use DigitalStars\SimpleVK\SimpleVK as vk;
-$vk = vk::create(ТОКЕН, '5.199')->setConfirm(STR); //STR - строка подтверждения сервера
-$vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникние в скрипте
+require_once __DIR__ . '/vendor/autoload.php';
+use DigitalStars\SimpleVK\SimpleVK;
+$vk = SimpleVK::create(ТОКЕН, '5.199')->setConfirm(STR); //STR - строка подтверждения сервера
+$vk->setUserLogError(ВАШ_VK_ID); //логгер ошибок в личку
 $data = $vk->initVars($peer_id, $user_id, $type, $message); //инициализация переменных из события
 if($type == 'message_new') {
     if($message == 'Привет') {
@@ -127,10 +118,10 @@ if($type == 'message_new') {
 
 ```php
 <?php
-require_once __DIR__.'/vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 use DigitalStars\SimpleVK\LongPoll;
 $vk = LongPoll::create(ТОКЕН, '5.199');
-$vk->setUserLogError(ID); //ID - это id vk, кому бот будет отправлять все ошибки, возникние в скрипте
+$vk->setUserLogError(ВАШ_VK_ID); //логгер ошибок в личку
 $vk->listen(function () use ($vk) {
     $data = $vk->initVars($peer_id, $user_id, $type, $message); //инициализация переменных из события
     if($type == 'message_new') {
@@ -144,7 +135,7 @@ $vk->listen(function () use ($vk) {
 
 ```php
 <?php
-require_once __DIR__.'/vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 use DigitalStars\SimpleVK\Bot;
 $bot = Bot::create(ТОКЕН, '5.199');
 $bot->cmd('img', '!картинка')->img('cat.jpg')->text('Вот твой кот');
@@ -199,29 +190,48 @@ $bot->btn('fish', 'Рыбка')->text('Вы выбрали Рыбку!')->img('f
 $bot->btn('cat', 'Котик')->text('Вы выбрали Котика!')->img('cat.jpg');
 $bot->run();
 ```
-### Бот на конструкторе, с использованием хранилища (Callback)
 
+## Режим отладки и фоновая обработка
+VK Callback API требует, чтобы ваш скрипт ответил "ok" и завершился в течение нескольких секунд. В противном случае VK посчитает запрос неудавшимся и начнет его повторять.  
+
+По умолчанию SimpleVK решает эту проблему, немедленно отправляя "ok" и разрывая соединение с VK, после чего продолжает выполнять ваш код в фоновом режиме.
+
+### Куда смотреть, если что-то не так?
+Важно понимать, что при таком подходе стандартные логи запросов в интерфейсе VK не будут содержать ошибок вашего PHP-скрипта, потому что для VK запрос всегда будет выглядеть успешным.
+
+1. Логи сервера (Главный источник)
+Все ошибки (возникшие до и после отправки "ok") будут записаны в error.log вашего веб-сервера. Это основной источник информации для отладки.
+2. Уведомления в ВК
+Если вы настроили обработчик ошибок (->setUserLogError()), он дополнительно отправит вам отформатированное сообщение об ошибке в ЛС.
+
+
+> [!IMPORTANT]  
+> Обратите внимание: этот обработчик перехватит только те ошибки, которые произошли после его инициализации.
+
+### Что делать, если нет доступа к логам?
+Если у вас возникает проблема до вызова `new SimpleVK()`, но вы не можете посмотреть логи сервера, воспользуйтесь режимом отладки. Он отключает немедленную отправку "ok", позволяя ошибке проявиться и стать видимой в логах запросов VK или при запуске скрипта в браузере.  
+
+Чтобы диагностировать проблему, поместите этот код в самое начало вашего файла-обработчика:
 ```php
-<?php
-require_once __DIR__.'/vendor/autoload.php';
-use DigitalStars\SimpleVK\{Bot, Store, SimpleVK as vk};
-$vk = vk::create(ТОКЕН, '5.199');
-$bot = Bot::create($vk);
-$bot->cmd('cmd1', '!запомни %s')->text('Запомнил!')->func(function ($msg, $params) use ($vk) {
-    $vk->initVars($id, $user_id, $payload, $user_id);
-    $store = Store::load($user_id); //загружаем хранилище пользователя
-    $store->sset('str', $params[0]); //записываем в ключ str его слово
-});
-$bot->cmd('cmd2', '!напомни')->func(function ($msg, $params) use ($vk) {
-    $vk->initVars($id, $user_id, $payload, $user_id);
-    $store = Store::load($user_id); //загружаем хранилище пользователя
-    $str = $store->get('str'); //выгружаем из его хранилища строку
-    $msg->text($str); //устанавливаем текст в экземпляре сообщения
-});
-$bot->run();
-```
+// Включаем отображение и логирование абсолютно всех ошибок
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
 
-### Конфиги
+// Подключаем автозагрузчик и другие файлы
+require_once 'vendor/autoload.php';
+// ...
+
+// Отключаем немедленную отправку "ok"
+SimpleVK::disableSendOK(true);
+
+// Далее ваш обычный код...
+$vk = new SimpleVK('YOUR_TOKEN', '5.199');
+```
+> [!IMPORTANT]  
+> После решения проблемы обязательно удалите или закомментируйте SimpleVK::disableSendOK(true); и настройки ini_set. В противном случае VK будет постоянно повторять запросы на ваш сервер.
+
+## Конфиги
 ```php
 <?php
 require_once __DIR__.'/vendor/autoload.php';
