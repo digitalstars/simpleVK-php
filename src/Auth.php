@@ -314,8 +314,7 @@ class Auth
         if (isset($captcha_sid) and isset($captcha_key))
             $captcha = "&captcha_sid=$captcha_sid&captcha_key=$captcha_key";
 
-        $token_url = 'https://oauth.vk.ru
-        /token?grant_type=password&client_id=2274003&client_secret=hHbZxrka2uZ6jB1inYsH' .
+        $token_url = 'https://oauth.vk.ru/token?grant_type=password&client_id=2274003&client_secret=hHbZxrka2uZ6jB1inYsH' .
             '&username=' . $this->login .
             '&password=' . $this->pass .
             $scope .
