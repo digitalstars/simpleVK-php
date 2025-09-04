@@ -129,16 +129,16 @@ class Coin {
         $payload = ($payload !== 0) ? $payload : rand(-2000000000, 2000000000);
         $fixed_sum = $fixed_sum ? '' : '_1';
         if ($sum === 0)
-            return 'vk.com/coin#t' . $this->merchant_id;
+            return 'vk.ru/coin#t' . $this->merchant_id;
         $sum = (int)($sum * 1000);
         if ($to_hex) {
             $merchant_id = dechex($this->merchant_id);
             $sum = dechex($sum);
             $payload = dechex($payload);
-            return ['url' => "vk.com/coin#m{$merchant_id}_{$sum}_{$payload}{$fixed_sum}", 'payload' => $payload];
+            return ['url' => "vk.ru/coin#m{$merchant_id}_{$sum}_{$payload}{$fixed_sum}", 'payload' => $payload];
         } else {
             $merchant_id = $this->merchant_id;
-            return ['url' => "vk.com/coin#x{$merchant_id}_{$sum}_{$payload}{$fixed_sum}", 'payload' => $payload];
+            return ['url' => "vk.ru/coin#x{$merchant_id}_{$sum}_{$payload}{$fixed_sum}", 'payload' => $payload];
         }
     }
 

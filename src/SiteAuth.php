@@ -22,7 +22,7 @@ class SiteAuth {
     public function auth() {
         if (isset($_GET['code'])) {
             $query = urldecode(http_build_query($this->settings + ["code" => $_GET['code']]));
-            $token = json_decode(file_get_contents("https://oauth.vk.com/access_token?" . $query), true);
+            $token = json_decode(file_get_contents("https://oauth.vk.ru/access_token?" . $query), true);
             if (isset($token["access_token"])) {
                 $this->data = $token;
                 return true;
@@ -37,6 +37,6 @@ class SiteAuth {
             "redirect_uri" => $this->settings["redirect_uri"],
             "response_type" => "code"
         ]));
-        return "https://oauth.vk.com/authorize?" . $query;
+        return "https://oauth.vk.ru/authorize?" . $query;
     }
 }

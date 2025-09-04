@@ -111,21 +111,21 @@ class Auth
      */
     private function loginInVK()
     {
-        $query_main_page = $this->getCURL('https://vk.com/');
+        $query_main_page = $this->getCURL('https://vk.ru/');
         preg_match('/name=\"ip_h\" value=\"(.*?)\"/s', $query_main_page['body'], $ip_h);
         preg_match('/name=\"lg_h\" value=\"(.*?)\"/s', $query_main_page['body'], $lg_h);
 
         $values_auth = [
             'act' => 'login',
             'role' => 'al_frame',
-            '_origin' => 'https://vk.com',
+            '_origin' => 'https://vk.ru',
             'utf8' => '1',
             'email' => $this->login,
             'pass' => $this->pass,
             'lg_h' => $lg_h[1],
             'ig_h' => $ip_h[1]
         ];
-        $get_url_redirect_auch = $this->getCURL('https://login.vk.com/?act=login', $values_auth);
+        $get_url_redirect_auch = $this->getCURL('https://login.vk.ru/?act=login', $values_auth);
 
         if (!isset($get_url_redirect_auch['header']['location']))
             throw new VkApiException("Ошибка, ссылка редиректа не получена");
@@ -221,8 +221,8 @@ class Auth
      */
     public function isAuth()
     {
-        $header = $this->getCURL("https://vk.com/feed")['header'];
-        if (isset($header['location'][0]) and strpos($header['location'][0], 'login.vk.com'))
+        $header = $this->getCURL("https://vk.ru/feed")['header'];
+        if (isset($header['location'][0]) and strpos($header['location'][0], 'login.vk.ru'))
             return False;
         return True;
     }
@@ -269,7 +269,7 @@ class Auth
         if ($resend)
             $scope .= "&revoke=1";
 
-        $token_url = 'https://oauth.vk.com/authorize?client_id=' . $this->id_app .
+        $token_url = 'https://oauth.vk.ru/authorize?client_id=' . $this->id_app .
             $scope .
             '&response_type=token';
 
@@ -314,7 +314,8 @@ class Auth
         if (isset($captcha_sid) and isset($captcha_key))
             $captcha = "&captcha_sid=$captcha_sid&captcha_key=$captcha_key";
 
-        $token_url = 'https://oauth.vk.com/token?grant_type=password&client_id=2274003&client_secret=hHbZxrka2uZ6jB1inYsH' .
+        $token_url = 'https://oauth.vk.ru
+        /token?grant_type=password&client_id=2274003&client_secret=hHbZxrka2uZ6jB1inYsH' .
             '&username=' . $this->login .
             '&password=' . $this->pass .
             $scope .

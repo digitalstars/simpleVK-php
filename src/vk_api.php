@@ -213,7 +213,7 @@ class vk_api {
      */
     public function request($method, $params = []) {
         list($method, $params) = $this->editRequestParams($method, $params);
-        $url = 'https://api.vk.com/method/' . $method;
+        $url = 'https://api.vk.ru/method/' . $method;
         $params['access_token'] = $this->token;
         $params['v'] = $this->version;
         $params['random_id'] = rand(-2147483648, 2147483647);
@@ -946,7 +946,7 @@ class vk_api {
      * @return mixed
      */
     public function dateRegistration($id) {
-        $site = file_get_contents("https://vk.com/foaf.php?id={$id}");
+        $site = file_get_contents("https://vk.ru/foaf.php?id={$id}");
         preg_match('<ya:created dc:date="(.*?)">', $site, $data);
         $data = explode('T', $data[1]);
         $date = date("d.m.Y", strtotime($data[0]));
