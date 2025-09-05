@@ -24,6 +24,10 @@
 <a href="https://t.me/+98OeLz7uZowwYjYy"><img src="https://img.shields.io/badge/-Чат_в_Telegram-26A5E4?style=flat&logo=telegram&logoColor=white" alt="Чат в Telegram"></a>
 </p>
 
+> [!IMPORTANT]  
+> SimpleVK уже переведен с endpoint'a [vk.com](vk.com) на [vk.ru](vk.ru) начиная с версий **v3.9.3** и **v2.14.3**  
+> Поэтому библиотека продолжит работать после 30 сентября. [[Новость]](https://habr.com/ru/news/943232/). 
+
 ## Ключевые особенности
 
 Помимо полной поддержки VK API, **SimpleVK** предоставляет высокоуровневые инструменты и архитектурные решения, которые кардинально ускоряют и упрощают разработку.
