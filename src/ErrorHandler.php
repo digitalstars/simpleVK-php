@@ -107,7 +107,7 @@ trait ErrorHandler
         string $message,
         string $file,
         int $line,
-        ?int $code = null,
+        null|string|int $code = null,
         ?Throwable $exception = null,
     ): bool {
         $this->snippet_cache = [];
@@ -162,7 +162,7 @@ trait ErrorHandler
         return true; // Подавляем стандартный обработчик PHP
     }
 
-    private function shouldLogException(?Throwable $exception, ?int $code): bool
+    private function shouldLogException(?Throwable $exception, null|string|int $code): bool
     {
         return !($exception instanceof SimpleVkException && in_array($code, ERROR_CODES_FOR_MANY_TRY, true));
     }
@@ -250,7 +250,7 @@ trait ErrorHandler
     private function dispatchErrorMessage(
         string $type,
         string $message,
-        ?int $code = null,
+        null|string|int $code = null,
         ?Throwable $exception = null
     ): void {
         if (is_callable($this->user_error_handler_or_ids)) {
