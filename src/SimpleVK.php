@@ -13,7 +13,7 @@ class SimpleVK {
     protected $version;
     public $data = [];
     protected $data_backup = [];
-    protected $api_url = 'https://api.vk.com/method/';
+    protected $api_url = 'https://api.vk.ru/method/';
     protected $token;
     private static $debug_mode = false;
     private static $retry_requests_processing = false;
@@ -286,7 +286,7 @@ class SimpleVK {
         }
 
         if (in_array('url', $category)) {
-            if (preg_match_all("/vk.com\/(?:id([0-9]+)|([a-z0-9_.]+))/", $msg, $matches)) {
+            if (preg_match_all("/vk.ru\/(?:id([0-9]+)|([a-z0-9_.]+))/", $msg, $matches)) {
                 $ids = array_filter(array_merge($matches[1], $matches[2]));
 
                 if (!empty($ids)) {
@@ -446,7 +446,7 @@ class SimpleVK {
         return isset($response['user']['date_created'])
             ? date("H:i:s d.m.Y", $response['user']['date_created'])
             : null;
-//        $site = file_get_contents("https://vk.com/foaf.php?id={$id}");
+//        $site = file_get_contents("https://vk.ru/foaf.php?id={$id}");
 //        preg_match('<ya:created dc:date="(.*?)">', $site, $data);
 //        $data = explode('T', $data[1]);
 //        $date = date("d.m.Y", strtotime($data[0]));

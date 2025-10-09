@@ -124,15 +124,15 @@ class Auth {
         if ($this->method == 0 or ($this->access_token == '' and $this->method == 1))
             return 0;
         if ($this->access_token != '') {
-            $check_valid_token = json_decode($this->getCURL("https://api.vk.com/method/users.get?v=5.103&access_token=" . $this->access_token)['body'], true);
+            $check_valid_token = json_decode($this->getCURL("https://api.vk.ru/method/users.get?v=5.103&access_token=" . $this->access_token)['body'], true);
             if (isset($check_valid_token['response'])) {
                 return 1;
             }
             if ($this->method = 1)
                 return 0;
         }
-        $header = $this->getCURL("https://vk.com/feed")['header'];
-        if (isset($header['location'][0]) and strpos($header['location'][0], 'login.vk.com')) {
+        $header = $this->getCURL("https://vk.ru/feed")['header'];
+        if (isset($header['location'][0]) and strpos($header['location'][0], 'login.vk.ru')) {
             $this->cookie = null;
             return 0;
         }
@@ -175,7 +175,7 @@ class Auth {
         if ($resend)
             $scope .= "&revoke=1";
 
-        $token_url = 'https://oauth.vk.com/authorize?client_id=' . $this->id_app . $scope . '&response_type=token';
+        $token_url = 'https://oauth.vk.ru/authorize?client_id=' . $this->id_app . $scope . '&response_type=token';
 
         $get_url_token = $this->getCURL($token_url);
 
@@ -207,7 +207,7 @@ class Auth {
         if ($captcha_key and $captcha_sid)
             $captcha = "&captcha_sid=$captcha_sid&captcha_key=$captcha_key";
 
-        $token_url = 'https://oauth.vk.com/token?grant_type=password' .
+        $token_url = 'https://oauth.vk.ru/token?grant_type=password' .
             '&client_id=' . $this->app['id'] .
             '&client_secret=' . $this->app['secret'] .
             '&username=' . $this->login .
@@ -274,21 +274,21 @@ class Auth {
         if (!isset($this->login) or !isset($this->pass))
             throw new SimpleVkException(0, "Для авторизации через приложение необходимо задать логин и пароль, либо куки");
 
-        $query_main_page = $this->getCURL('https://vk.com/');
+        $query_main_page = $this->getCURL('https://vk.ru/');
         preg_match('/name=\"ip_h\" value=\"(.*?)\"/s', $query_main_page['body'], $ip_h);
         preg_match('/name=\"lg_h\" value=\"(.*?)\"/s', $query_main_page['body'], $lg_h);
 
         $values_auth = [
             'act' => 'login',
             'role' => 'al_frame',
-            '_origin' => 'https://vk.com',
+            '_origin' => 'https://vk.ru',
             'utf8' => '1',
             'email' => $this->login,
             'pass' => $this->pass,
             'lg_h' => $lg_h[1],
             'ig_h' => $ip_h[1]
         ];
-        $get_url_redirect_auch = $this->getCURL('https://login.vk.com/?act=login', $values_auth);
+        $get_url_redirect_auch = $this->getCURL('https://login.vk.ru/?act=login', $values_auth);
 
         if (!isset($get_url_redirect_auch['header']['location']))
             throw new SimpleVkException(0, "Ошибка, ссылка редиректа не получена");
