@@ -71,6 +71,7 @@ trait Request {
         curl_setopt($ch, CURLOPT_POSTFIELDS, $params);
         $json_result = curl_exec($ch);
         $result = json_decode($json_result, true);
+        $errorCode = curl_errno($ch);
 
         unset($ch);
         $is_json_error = (json_last_error() !== JSON_ERROR_NONE);
@@ -82,7 +83,7 @@ trait Request {
         //при отправке peer_ids возвращается response[0], response[1]['error'] ... для каждого id
         //тут это не обрабатывается и ошибка не вызывается
 
-        if (isset($result['error']) || !isset($result) || $is_json_error || curl_errno($ch)) {
+        if (isset($result['error']) || !isset($result) || $is_json_error || $errorCode) {
             if($is_use_method) {
                 $access_token = substr($params['access_token'], 0, 10) . '****';
                 $v = $params['v'];
@@ -102,8 +103,6 @@ trait Request {
             } else {
                 $params['url'] = $url;
             }
-
-            $errorCode = curl_errno($ch);
 
             if($errorCode == CURLE_COULDNT_CONNECT ||$errorCode == CURLE_COULDNT_RESOLVE_HOST) {
                 $error_code = 77779;
