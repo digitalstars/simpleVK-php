@@ -72,7 +72,7 @@ trait Request {
         $json_result = curl_exec($ch);
         $result = json_decode($json_result, true);
 
-        curl_close($ch);
+        unset($ch);
         $is_json_error = (json_last_error() !== JSON_ERROR_NONE);
 
         if (isset($result['error']) && self::$error_suppression) {
