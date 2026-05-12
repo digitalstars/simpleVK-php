@@ -513,7 +513,7 @@ class SimpleVK {
         }
         curl_setopt($ch, CURLOPT_URL, 'https://jsoneditoronline.herokuapp.com/v1/docs/');
         $result = json_decode(curl_exec($ch), True);
-        curl_close($ch);
+        unset($ch);
         return 'https://jsoneditoronline.org/?id=' . $result['id'];
     }
 

@@ -147,7 +147,7 @@ class LongPoll extends SimpleVK {
         $ch = $this->curlInit();
         curl_setopt($ch, CURLOPT_URL, $url . http_build_query($params));
         $result = json_decode(curl_exec($ch), true);
-        curl_close($ch);
+        unset($ch);
 
         if (!isset($result)) {
             if ($iteration <= 5) {

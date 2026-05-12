@@ -107,7 +107,7 @@ class Diagnostics {
         curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36');
 
         $response = curl_exec($ch);
-        curl_close($ch);
+        unset($ch);
 
         $data = json_decode($response, true);
 
@@ -223,7 +223,7 @@ class Diagnostics {
         curl_setopt($ch, CURLOPT_TIMEOUT_MS, 300); //тайм-аут в 300 мс
         $result = curl_exec($ch);
         $info = curl_getinfo($ch);
-        curl_close($ch);
+        unset($ch);
 
         if(!$result) {
             return false;

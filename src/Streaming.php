@@ -132,7 +132,7 @@ class Streaming {
         }
 
         $result = json_decode(curl_exec($ch), true, 512, JSON_THROW_ON_ERROR);
-        curl_close($ch);
+        unset($ch);
 
         if (empty($result)) {
             throw new SimpleVkException(77777, 'Вк вернул пустой ответ');

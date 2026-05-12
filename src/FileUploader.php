@@ -55,7 +55,7 @@ trait FileUploader {
                 throw new SimpleVkException(0, "Ошибка скачивания файла: " . curl_error($ch));
             }
 
-            curl_close($ch);
+            unset($ch);
             fclose($fp);
 
             $mime_type = mime_content_type($tmp_filename);

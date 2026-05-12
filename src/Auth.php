@@ -339,7 +339,7 @@ class Auth {
         );
 
         $out = curl_exec($curl);
-        curl_close($curl);
+        unset($curl);
         if (isset($headers['set-cookie'])) {
             $this->parseCookie($headers['set-cookie']);
         }
