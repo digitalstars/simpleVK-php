@@ -82,7 +82,7 @@ class SimpleVK {
             }
         }
 
-        if ((double)($version) <  5.139) {
+        if ((float)($version) <  5.139) {
             throw new Exception('SimpleVK3 работает с VK API версиями 5.139 или выше. Вы запустили с v' . $version);
         }
 
