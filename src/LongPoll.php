@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK;
 
 use DigitalStars\SimpleVK\Internal\UniqueEventHandler;
 use DigitalStars\SimpleVK\Utils\EnvironmentDetector;
 
-class LongPoll extends SimpleVK {
+class LongPoll extends SimpleVK
+{
     use ErrorHandler;
 
     private $key;
@@ -17,9 +20,12 @@ class LongPoll extends SimpleVK {
     private static $longpoll_in_web = false;
     public static $use_user_long_poll = 0;
 
-    public function __construct($token, $version, $also_version = null, $data = null) {
+    public function __construct(#[\SensitiveParameter] $token, $version, $also_version = null, $data = null)
+    {
         if (EnvironmentDetector::isWeb() && self::$longpoll_in_web == false)
-            die("Запуск longpoll возможен только в cli. Используйте LongPoll::enableInWeb() чтобы убрать это ограничение.");
+            die(
+                'Запуск longpoll возможен только в cli. Используйте LongPoll::enableInWeb() чтобы убрать это ограничение.',
+            );
         $this->multiThread();
         $this->processAuth($token, $version, $also_version);
         $data = $this->userInfo();
@@ -28,43 +34,46 @@ class LongPoll extends SimpleVK {
         } else {
             $this->auth_type = 'group';
             $this->group_id = $this->request('groups.getById')['groups'][0]['id'];
-//            $this->request('groups.setLongPollSettings', [
-//                'group_id' => $this->group_id,
-//                'enabled' => 1,
-//                'api_version' => $this->version,
-//                'message_new' => 1,
-//                'message_event' => 1
-//            ]);
+
+            //            $this->request('groups.setLongPollSettings', [
+            //                'group_id' => $this->group_id,
+            //                'enabled' => 1,
+            //                'api_version' => $this->version,
+            //                'message_new' => 1,
+            //                'message_event' => 1
+            //            ]);
         }
         $this->getLongPollServer();
     }
 
-    public static function create($token, $version, $also_version = null, $data = null) {
+    public static function create(#[\SensitiveParameter] $token, $version, $also_version = null, $data = null)
+    {
         return new self($token, $version, $also_version, $data);
     }
 
-    public static function enableInWeb($bool = true) {
+    public static function enableInWeb($bool = true)
+    {
         self::$longpoll_in_web = $bool;
     }
 
     /**
      * Проверить наличие модуля многопоточности и если есть включить потоки
      */
-    private function multiThread() {
-        $this->is_multi_thread = (extension_loaded('posix') && extension_loaded('pcntl'));
+    private function multiThread()
+    {
+        $this->is_multi_thread = extension_loaded('posix') && extension_loaded('pcntl');
     }
 
-    public function listen($anon) {
+    public function listen($anon)
+    {
         while ($data = $this->processingData()) {
             foreach ($data['updates'] as $event) {
                 $is_dublicated = UniqueEventHandler::addEventToCache($event);
-                if($is_dublicated) {
+                if ($is_dublicated) {
                     continue;
                 }
 
                 if ($this->is_multi_thread) {
-                    while (pcntl_wait($status, WNOHANG | WUNTRACED) > 0) {
-                    }
                     $pid = pcntl_fork();
                 } else
                     $pid = 0;
@@ -85,17 +94,20 @@ class LongPoll extends SimpleVK {
                         $this->__exit();
                 }
             }
-//            if ($this->vk instanceof Execute) {
-//                $this->vk->exec();
-//            }
+
+            //            if ($this->vk instanceof Execute) {
+            //                $this->vk->exec();
+            //            }
         }
     }
 
-    private function __exit() {
+    private function __exit()
+    {
         posix_kill(posix_getpid(), SIGTERM);
     }
 
-    private function getLongPollServer() {
+    private function getLongPollServer()
+    {
         if ($this->auth_type == 'user')
             $data = $this->request('messages.getLongPollServer', ['need_pts' => 1, 'lp_version' => 10]);
         else
@@ -106,7 +118,8 @@ class LongPoll extends SimpleVK {
         list($this->key, $this->server, $this->ts) = [$data['key'], $data['server'], $data['ts']];
     }
 
-    private function processingData() {
+    private function processingData()
+    {
         while ($data = $this->getData()) {
             if (isset($data['failed'])) {
                 switch ($data['failed']) {
@@ -128,7 +141,8 @@ class LongPoll extends SimpleVK {
         }
     }
 
-    private function getData() {
+    private function getData()
+    {
         $default_params = ['act' => 'a_check', 'key' => $this->key, 'ts' => $this->ts, 'wait' => 25];
         try {
             if ($this->auth_type == 'user') {
@@ -143,7 +157,8 @@ class LongPoll extends SimpleVK {
         }
     }
 
-    private function request_core_lp($url, $params = [], $iteration = 1) {
+    private function request_core_lp($url, $params = [], $iteration = 1)
+    {
         $ch = $this->curlInit();
         curl_setopt($ch, CURLOPT_URL, $url . http_build_query($params));
         $result = json_decode(curl_exec($ch), true);
@@ -151,81 +166,86 @@ class LongPoll extends SimpleVK {
 
         if (!isset($result)) {
             if ($iteration <= 5) {
-                SimpleVkException::logCustomError('Запрос к вк вернул пустоту. Повторная отправка, попытка №' . $iteration);
+                SimpleVkException::logCustomError('Запрос к вк вернул пустоту. Повторная отправка, попытка №'
+                . $iteration);
                 $result = $this->request_core_lp($url, $params, ++$iteration); //TODO рекурсия
             } else {
-                $error_message = "Запрос к вк вернул пустоту. Завершение 5 попыток отправки\n
-                                  Метод:$url\nПараметры:\n" . json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $error_message =
+                    "Запрос к вк вернул пустоту. Завершение 5 попыток отправки\n
+                                  Метод:{$url}\nПараметры:\n"
+                    . json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 SimpleVkException::logCustomError($error_message);
-                throw new \Exception($error_message, 77777);
+                throw new \Exception($error_message, 77_777);
             }
         }
         return $result;
     }
 
-//    private function parseBeginningMessageStruct($data) {
-//        $this->data['object']['id'] = $data[1];
-//        $this->data['object']['peer_id'] = $data[3];
-//        $this->data_backup = $this->data;
-//    }
+    //    private function parseBeginningMessageStruct($data) {
+    //        $this->data['object']['id'] = $data[1];
+    //        $this->data['object']['peer_id'] = $data[3];
+    //        $this->data_backup = $this->data;
+    //    }
 
-    private function userLongPoll($anon) {
+    private function userLongPoll($anon)
+    {
         $data = $this->data;
         $this->data = [];
         if (isset($data[2]))
             $this->initFlags($data[2]);
         switch ($data[0]) {
             case 2:
-            { //Установка флагов сообщения
-                $this->data['type'] = 'set_message_flags';
-                $this->parseMessageStruct($data);
-                $this->data['flags']['important'] = $this->flag(3);
-                $this->data['flags']['spam'] = $this->flag(6);
-                $this->data['flags']['deleted'] = $this->flag(7);
-                $this->data['flags']['deleted_all'] = (int)($this->flag(7) && $this->flag(17));
-                $this->data['flags']['audio_listened'] = $this->flag(12);
-                break;
-            }
+                { //Установка флагов сообщения
+                    $this->data['type'] = 'set_message_flags';
+                    $this->parseMessageStruct($data);
+                    $this->data['flags']['important'] = $this->flag(3);
+                    $this->data['flags']['spam'] = $this->flag(6);
+                    $this->data['flags']['deleted'] = $this->flag(7);
+                    $this->data['flags']['deleted_all'] = (int) ($this->flag(7) && $this->flag(17));
+                    $this->data['flags']['audio_listened'] = $this->flag(12);
+                    break;
+                }
             case 3:
-            { //Сбор флагов сообщения
-                $this->data['type'] = 'unset_message_flags';
-                $this->parseMessageStruct($data);
-                $this->data['flags']['important'] = $this->flag(3);
-                $this->data['flags']['cancel_spam'] = (int)($this->flag(6) && $this->flag(15));
-                $this->data['flags']['deleted'] = $this->flag(7);
-                break;
-            }
+                { //Сбор флагов сообщения
+                    $this->data['type'] = 'unset_message_flags';
+                    $this->parseMessageStruct($data);
+                    $this->data['flags']['important'] = $this->flag(3);
+                    $this->data['flags']['cancel_spam'] = (int) ($this->flag(6) && $this->flag(15));
+                    $this->data['flags']['deleted'] = $this->flag(7);
+                    break;
+                }
             case 4:
-            { //входящее/исходящее сообщение
-                $this->data['type'] = $this->flag(1) ? "message_reply" : "message_new";
-                $this->parseMessageStruct($data);
-                $this->parseMessageFlags();
-                break;
-            }
+                { //входящее/исходящее сообщение
+                    $this->data['type'] = $this->flag(1) ? 'message_reply' : 'message_new';
+                    $this->parseMessageStruct($data);
+                    $this->parseMessageFlags();
+                    break;
+                }
             case 5:
-            { //редактирование сообщения
-                $this->data['type'] = 'message_edit';
-                $this->parseMessageStruct($data);
-                $this->parseMessageFlags();
-                break;
-            }
+                { //редактирование сообщения
+                    $this->data['type'] = 'message_edit';
+                    $this->parseMessageStruct($data);
+                    $this->parseMessageFlags();
+                    break;
+                }
             case 18:
-            { //добавление сниппсета к сообщению
-                $this->data['type'] = 'vk_add_snippet';
-                $this->parseMessageStruct($data);
-                $this->parseMessageFlags();
-                break;
-            }
+                { //добавление сниппсета к сообщению
+                    $this->data['type'] = 'vk_add_snippet';
+                    $this->parseMessageStruct($data);
+                    $this->parseMessageFlags();
+                    break;
+                }
         }
         if ($data[0] == 4) {
-//            print_r($data);
-//            print_r($this->data);
+            //            print_r($data);
+            //            print_r($this->data);
         }
         $this->data_backup = $this->data;
         $anon($data);
     }
 
-    private function parseMessageFlags() {
+    private function parseMessageFlags()
+    {
         $this->data['flags']['unread'] = $this->flag(0);
         $this->data['flags']['chat'] = $this->flag(4);
         $this->data['flags']['friends'] = $this->flag(5);
@@ -236,7 +256,8 @@ class LongPoll extends SimpleVK {
         $this->data['flags']['reply_msg'] = $this->flag(21);
     }
 
-    private function parseMessageStruct($data) {
+    private function parseMessageStruct($data)
+    {
         $this->data['object']['id'] = $data[1] ?? null;
         $this->data['object']['peer_id'] = $data[3] ?? null;
         if (isset($data[4])) {
@@ -263,16 +284,16 @@ class LongPoll extends SimpleVK {
         $this->data_backup = $this->data;
     }
 
-    private function initFlags($data) {
+    private function initFlags($data)
+    {
         $data = is_array($data) ? $data[0] : $data;
         $flags = str_split(strrev(decbin($data)));
-        array_walk($flags, static function ($key, $sym) {
-            return $sym * 2 ^ $key;
-        });
+        array_walk($flags, static fn($key, $sym) => ($sym * 2) ^ $key);
         $this->event_flags = $flags;
     }
 
-    private function flag($f) {
+    private function flag($f)
+    {
         return $this->event_flags[$f] ?? 0;
     }
 }

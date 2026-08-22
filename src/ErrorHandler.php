@@ -1,13 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK;
 
-require_once('config_simplevk.php');
+require_once 'config_simplevk.php';
 
 use Closure;
 use DigitalStars\SimpleVK\Utils\EnvironmentDetector;
 use ErrorException;
-use Throwable, Exception;
+use Exception;
+use Throwable;
 
 /**
  * Обработчик ошибок и исключений: форматированный трейс со сниппетами кода,
@@ -15,9 +18,8 @@ use Throwable, Exception;
  */
 trait ErrorHandler
 {
-
     /** @var Closure|array<int>|int|null VK ID (или массив/колбэк), куда отправлять ошибки. */
-    private Closure|array|null|int $user_error_handler_or_ids = null;
+    private Closure|array|int|null $user_error_handler_or_ids = null;
 
     private array $paths_to_filter = [];
 
@@ -53,7 +55,7 @@ trait ErrorHandler
         set_error_handler([$this, 'userErrorHandler']); // Для пользовательских ошибок и всех нефатальных
         set_exception_handler([$this, 'exceptionHandler']); // Для необработанных исключений
         // Для обнаружения фатальных ошибок, из-за которых не успевают сработать обычные обработчики
-        register_shutdown_function(fn() => $this->checkForFatalError());
+        register_shutdown_function($this->checkForFatalError(...));
         return $this;
     }
 
@@ -82,24 +84,15 @@ trait ErrorHandler
     /**
      * Публичный, потому что исключения могут вызываться и обрабатываться за пределами текущего класса
      */
-    public function exceptionHandler(
-        Throwable $exception,
-        int $set_type = E_ERROR,
-    ): void {
+    public function exceptionHandler(Throwable $exception, int $set_type = E_ERROR): void
+    {
         $message = $this->normalizeMessage($exception->getMessage());
         $message = $this->filterPaths($message);
         $file = $this->normalizeMessage($exception->getFile());
-        $line = (int)$this->normalizeMessage((string)$exception->getLine()); // Приведение к int для надежности
+        $line = (int) $this->normalizeMessage((string) $exception->getLine()); // Приведение к int для надежности
         $code = $exception->getCode();
 
-        $this->userErrorHandler(
-            $set_type,
-            $message,
-            $file,
-            $line,
-            $code,
-            $exception,
-        );
+        $this->userErrorHandler($set_type, $message, $file, $line, $code, $exception);
     }
 
     /**
@@ -110,7 +103,7 @@ trait ErrorHandler
         string $message,
         string $file,
         int $line,
-        null|string|int $code = null,
+        string|int|null $code = null,
         ?Throwable $exception = null,
     ): bool {
         $this->snippet_cache = [];
@@ -138,12 +131,12 @@ trait ErrorHandler
 
         // --- ФОРМИРОВАНИЕ ЗАГОЛОВКОВ ---
         $console_header = $this->formatErrorLevel($error_level) . $message;
-        $plain_header   = strip_tags(preg_replace('/\033\[[0-9;]*m/', '', $console_header));
+        $plain_header = strip_tags(preg_replace('/\033\[[0-9;]*m/', '', $console_header));
 
         // --- СБОРКА ФИНАЛЬНЫХ СООБЩЕНИЙ ---
-        $console_message = "$console_header\n\n$console_trace";
-        $plain_message   = "$plain_header\n\n$plain_trace";
-        $vk_message      = "$plain_header\n\n$vk_trace";
+        $console_message = "{$console_header}\n\n{$console_trace}";
+        $plain_message = "{$plain_header}\n\n{$plain_trace}";
+        $vk_message = "{$plain_header}\n\n{$vk_trace}";
 
         // --- Логирование ---
         if ($this->shouldLogException($exception, $code)) {
@@ -165,7 +158,7 @@ trait ErrorHandler
         return true; // Подавляем стандартный обработчик PHP
     }
 
-    private function shouldLogException(?Throwable $exception, null|string|int $code): bool
+    private function shouldLogException(?Throwable $exception, string|int|null $code): bool
     {
         return !($exception instanceof SimpleVkException && in_array($code, ERROR_CODES_FOR_MANY_TRY, true));
     }
@@ -173,7 +166,8 @@ trait ErrorHandler
     private function displayError(string $coloredMessage, string $clearMessage): void
     {
         match (EnvironmentDetector::getEnvironment()) {
-            EnvironmentDetector::ENV_WEB => print "<pre>" . htmlspecialchars($clearMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</pre>",
+            EnvironmentDetector::ENV_WEB => print
+                '<pre>' . htmlspecialchars($clearMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>',
             EnvironmentDetector::ENV_CLI_INTERACTIVE => print $coloredMessage,
             EnvironmentDetector::ENV_CLI_NON_INTERACTIVE => print $clearMessage,
         };
@@ -199,7 +193,7 @@ trait ErrorHandler
                     0, // code
                     $error['type'],
                     $error['file'],
-                    $error['line']
+                    $error['line'],
                 );
                 $this->exceptionHandler($exception);
             }
@@ -259,8 +253,8 @@ trait ErrorHandler
     private function dispatchErrorMessage(
         string $type,
         string $message,
-        null|string|int $code = null,
-        ?Throwable $exception = null
+        string|int|null $code = null,
+        ?Throwable $exception = null,
     ): void {
         if (is_callable($this->user_error_handler_or_ids)) {
             call_user_func($this->user_error_handler_or_ids, $type, $message, $code, $exception);
@@ -269,12 +263,16 @@ trait ErrorHandler
             if ($this->send_error_in_vk) {
                 try {
                     // Ошибки не вызываются при недоставке юзеру, потому что у peer_ids другой формат ответа
-                    $this->request('messages.send', [ // отправка ошибки в ВК
-                        'peer_ids' => $peer_ids,
-                        'message' => $message,
-                        'random_id' => 0,
-                        'dont_parse_links' => 1
-                    ], use_placeholders: false);
+                    $this->request(
+                        'messages.send',
+                        [ // отправка ошибки в ВК
+                            'peer_ids' => $peer_ids,
+                            'message' => $message,
+                            'random_id' => 0,
+                            'dont_parse_links' => 1,
+                        ],
+                        use_placeholders: false,
+                    );
                 } catch (Exception $e) {
                     trigger_error('Не удалось отправить ошибку в ЛС: ' . $e->getMessage(), E_USER_WARNING);
                 }
@@ -284,7 +282,7 @@ trait ErrorHandler
 
     protected function getCodeSnippet(string $file, int $line, int $padding = 0, bool $with_colors = true): string
     {
-        $cache_key = "$file:$line:$padding:" . ($with_colors ? 'color' : 'nocolor');
+        $cache_key = "{$file}:{$line}:{$padding}:" . ($with_colors ? 'color' : 'nocolor');
 
         if (isset($this->snippet_cache[$cache_key])) {
             return $this->snippet_cache[$cache_key];
@@ -309,7 +307,7 @@ trait ErrorHandler
         $snippet_lines = [];
         for ($i = $start; $i < $end; $i++) {
             $line_number_text = ($i + 1) . ': ';
-            $code_text = trim((string)$lines[$i]);
+            $code_text = trim((string) $lines[$i]);
 
             if ($with_colors) {
                 $line_number = $this->coloredLog($line_number_text, 'YELLOW');
@@ -365,7 +363,7 @@ trait ErrorHandler
         $trace_model = [];
         foreach ($trace_data as $num => $data) {
             $file_path = $data['file'] ?? null;
-            $is_internal = ($file_path === null);
+            $is_internal = $file_path === null;
             $is_user_file = !$is_internal && !preg_match(self::VENDOR_PATH_PATTERN, str_replace('\\', '/', $file_path));
 
             if ($this->short_trace) {
@@ -377,7 +375,11 @@ trait ErrorHandler
                     // Internal-вызов оставляем, только если он был сделан из пользовательского кода
                     $caller_frame = $trace_data[$num + 1] ?? null;
                     if ($caller_frame && isset($caller_frame['file'])) {
-                        $caller_is_vendor = preg_match(self::VENDOR_PATH_PATTERN, str_replace('\\', '/', $caller_frame['file']));
+                        $caller_is_vendor = preg_match(self::VENDOR_PATH_PATTERN, str_replace(
+                            '\\',
+                            '/',
+                            $caller_frame['file'],
+                        ));
                         if ($caller_is_vendor) {
                             continue; // Вызван из vendor или либы, пропускаем
                         }
@@ -391,8 +393,8 @@ trait ErrorHandler
             $snippet_colored = '';
             $snippet_plain = '';
             if (!$is_internal) {
-                $snippet_colored = $this->getCodeSnippet($file_path, (int)($data['line'] ?? 0), 0, true);
-                $snippet_plain   = $this->getCodeSnippet($file_path, (int)($data['line'] ?? 0), 0, false);
+                $snippet_colored = $this->getCodeSnippet($file_path, (int) ($data['line'] ?? 0), 0, true);
+                $snippet_plain = $this->getCodeSnippet($file_path, (int) ($data['line'] ?? 0), 0, false);
             }
 
             $trace_model[] = [
@@ -422,26 +424,31 @@ trait ErrorHandler
             $log = fn($text, $color) => $with_colors ? $this->coloredLog($text, $color) : $text;
 
             if ($frame['is_internal']) {
-                $class_function = $frame['class'] ? "{$frame['class']}->{$frame['function']}()" : "{$frame['function']}()";
-                $trace_string .= $log("#{$frame['num']} ", 'GREEN')
-                    . $log('[internal function]', 'BLUE') . "\n"
-                    . $log("?: ", 'YELLOW')
-                    . $log($class_function, 'WHITE') . "\n\n";
+                $class_function = $frame['class']
+                    ? "{$frame['class']}->{$frame['function']}()"
+                    : "{$frame['function']}()";
+                $trace_string .=
+                    $log("#{$frame['num']} ", 'GREEN')
+                    . $log('[internal function]', 'BLUE')
+                    . "\n"
+                    . $log('?: ', 'YELLOW')
+                    . $log($class_function, 'WHITE')
+                    . "\n\n";
                 continue;
             }
 
             $user_file_marker = $frame['is_user_file'] ? '➡ ' : '';
             $file_path = $shorten_paths ? $this->filterPaths($frame['file']) : $frame['file'];
 
-            $header = $log("{$user_file_marker}#{$frame['num']} ", 'GREEN')
+            $header =
+                $log("{$user_file_marker}#{$frame['num']} ", 'GREEN')
                 . $log($file_path, 'BLUE')
                 . $log(":{$frame['line']}", 'YELLOW');
 
             // Выбираем нужный сниппет (цветной или простой)
             $snippet = $with_colors ? $frame['snippet_colored'] : $frame['snippet_plain'];
 
-            $trace_string .= $header . "\n"
-                . ($snippet ? $log($snippet, 'WHITE') . "\n" : "\n");
+            $trace_string .= $header . "\n" . ($snippet ? $log($snippet, 'WHITE') . "\n" : "\n");
         }
         return $trace_string;
     }

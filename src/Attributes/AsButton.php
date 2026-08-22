@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\Attributes;
 
 use Attribute;
@@ -16,6 +19,6 @@ class AsButton
         public string $label = 'Базовая кнопка',
         public ?string $payload = null,
         public string $color = 'blue',
-        public string $type = 'text'
+        public string $type = 'text',
     ) {}
 }

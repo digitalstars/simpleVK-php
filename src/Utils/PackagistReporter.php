@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * PackagistReporter: Класс для отправки анонимной статистики установки на Packagist.
  *
@@ -34,7 +37,8 @@ final class PackagistReporter
         try {
             self::reportComposer();
             @touch($reportedVersionFile);
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+        }
     }
 
     /**
@@ -48,7 +52,7 @@ final class PackagistReporter
         }
 
         $projectRootPath = dirname(self::VENDOR_PATH) . '/';
-        $projectHash = md5((string)$projectRootPath);
+        $projectHash = md5((string) $projectRootPath);
 
         return sys_get_temp_dir() . '/simplevk_reporter_' . $projectHash . '_' . self::LIBRARY_VERSION;
     }
@@ -66,7 +70,7 @@ final class PackagistReporter
         }
 
         try {
-            $composerData = json_decode((string)file_get_contents($installedJsonPath), true, 512, JSON_THROW_ON_ERROR);
+            $composerData = json_decode((string) file_get_contents($installedJsonPath), true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable $e) {
             return [];
         }
@@ -101,20 +105,19 @@ final class PackagistReporter
         }
         $postData = ['downloads' => $downloads];
 
-        $phpVersion = 'PHP '.PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION.'.'.PHP_RELEASE_VERSION;
+        $phpVersion = 'PHP ' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . '.' . PHP_RELEASE_VERSION;
         $userAgent = sprintf(
             'Composer/%s (%s; %s; %s; SimpleVK-CI-Installer)', //прозрачно говорит о том, что у нас свой установщик
             '2.8.6', // Актуальная версия Composer
             function_exists('php_uname') ? php_uname('s') : 'Unknown',
             function_exists('php_uname') ? php_uname('r') : 'Unknown',
-            $phpVersion
+            $phpVersion,
         );
 
         $opts = [
             'http' => [
                 'method' => 'POST',
-                'header' => "Content-Type: application/json\r\n" .
-                    "User-Agent: {$userAgent}\r\n",
+                'header' => "Content-Type: application/json\r\n" . "User-Agent: {$userAgent}\r\n",
                 'content' => json_encode($postData),
                 'timeout' => 5,
                 'ignore_errors' => true,

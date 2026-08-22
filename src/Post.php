@@ -1,13 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK;
 
-class Post extends BaseConstructor {
-    public static function create($vk = null, &$cfg =  null) {
+class Post extends BaseConstructor
+{
+    public static function create($vk = null, &$cfg = null)
+    {
         return new self($vk, $cfg);
     }
 
-    public function load($cfg = []) {
+    public function load($cfg = [])
+    {
         if ($cfg instanceof Post) {
             $this->vk = $cfg->vk;
             $this->config = $cfg->config;
@@ -16,7 +21,8 @@ class Post extends BaseConstructor {
         return $this;
     }
 
-    public function send($id = null, $publish_date = null, $vk = null) {
+    public function send($id = null, $publish_date = null, $vk = null)
+    {
         $params = [];
         if (!is_null($publish_date)) {
             if ($publish_date >= time())
@@ -31,7 +37,7 @@ class Post extends BaseConstructor {
         if (empty($this->vk) and isset($vk))
             $this->vk = $vk;
         if (empty($this->vk))
-            throw new SimpleVkException(0, "Экземпляр SimpleVK не передан");
+            throw new SimpleVkException(0, 'Экземпляр SimpleVK не передан');
         if (empty($id)) {
             $id = $this->vk->userInfo()['id'];
         }
@@ -55,7 +61,7 @@ class Post extends BaseConstructor {
             $attachments = array_merge($attachments, $this->config['params']['attachment']);
             unset($this->config['params']['attachment']);
         }
-        $attachments = !empty($attachments) ? ['attachment' => join(",", $attachments)] : [];
+        $attachments = !empty($attachments) ? ['attachment' => implode(',', $attachments)] : [];
 
         if (isset($this->config['params']))
             $params += $this->config['params'];

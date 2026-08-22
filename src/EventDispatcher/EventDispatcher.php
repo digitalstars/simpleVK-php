@@ -1,14 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\EventDispatcher;
 
 use Closure;
+use DigitalStars\SimpleVK\Attributes\AsButton;
+use DigitalStars\SimpleVK\Attributes\Fallback;
+use DigitalStars\SimpleVK\Attributes\Trigger;
+use DigitalStars\SimpleVK\Attributes\UseMiddleware;
 use DigitalStars\SimpleVK\SimpleVK;
-use DigitalStars\SimpleVK\Attributes\{AsButton, Trigger, Fallback, UseMiddleware};
 use LogicException;
 use PhpToken;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use ReflectionClass;
-use RecursiveIteratorIterator, RecursiveDirectoryIterator;
 use ReflectionException;
 use RuntimeException;
 use Throwable;
@@ -44,22 +50,23 @@ class EventDispatcher
             $this->scanDirectoryForActions($path);
         }
 
-        $routeCount = count($this->routeMap['payload']) + count($this->routeMap['command']) + count($this->routeMap['regex']);
+        $routeCount =
+            count($this->routeMap['payload']) + count($this->routeMap['command']) + count($this->routeMap['regex']);
         if ($routeCount === 0 && $this->fallbackAction === null) {
             throw new LogicException(
-                "Диспетчер: Сканирование маршрутов завершено, но не найдено ни одного маршрута или fallback-обработчика. " .
-                "Убедитесь, что ваши классы-обработчики (Action) имеют атрибуты #[Trigger], #[AsButton] или #[Fallback] и находятся в правильном пространстве имен.",
-                0
+                'Диспетчер: Сканирование маршрутов завершено, но не найдено ни одного маршрута или fallback-обработчика. '
+                . 'Убедитесь, что ваши классы-обработчики (Action) имеют атрибуты #[Trigger], #[AsButton] или #[Fallback] и находятся в правильном пространстве имен.',
+                0,
             );
         }
     }
 
     public function handle(?array $externalEvent = null): void
     {
-        if(is_array($externalEvent) && empty($externalEvent)) {
+        if (is_array($externalEvent) && empty($externalEvent)) {
             trigger_error(
-                "Диспетчер: Метод handle() был вызван с пустым массивом событий. Обработка прекращена.",
-                E_USER_NOTICE
+                'Диспетчер: Метод handle() был вызван с пустым массивом событий. Обработка прекращена.',
+                E_USER_NOTICE,
             );
             return;
         }
@@ -71,13 +78,13 @@ class EventDispatcher
         $this->vk->initText($text)->initUserID($userId)->initPayload($payload)->initType($eventType);
 
         if (is_null($userId)) {
-            if($this->config->debug){
+            if ($this->config->debug) {
                 trigger_error(
                     "Диспетчер: Получено событие типа '{$eventType}' без user_id. Обработка пропущена.",
-                    E_USER_NOTICE
+                    E_USER_NOTICE,
                 );
             }
-//
+
             return;
         }
 
@@ -90,7 +97,7 @@ class EventDispatcher
             $payloadJson = json_encode($payload);
             trigger_error(
                 "Диспетчер: Не найден подходящий маршрут для пользователя '{$userId}'. Текст: '{$text}', Payload: {$payloadJson}. Резервный обработчик (fallback) не настроен.",
-                E_USER_NOTICE
+                E_USER_NOTICE,
             );
             return;
         }
@@ -115,7 +122,7 @@ class EventDispatcher
             if (isset($this->routeMap['payload'][$actionName])) {
                 return [
                     'actionClass' => $this->routeMap['payload'][$actionName],
-                    'actionArgs' => array_diff_key($payload, ['action' => ''])
+                    'actionArgs' => array_diff_key($payload, ['action' => '']),
                 ];
             }
         }
@@ -126,7 +133,7 @@ class EventDispatcher
             if (isset($this->routeMap['command'][$text])) {
                 return [
                     'actionClass' => $this->routeMap['command'][$text],
-                    'actionArgs' => []
+                    'actionArgs' => [],
                 ];
             }
             // Поиск по регулярному выражению
@@ -134,7 +141,7 @@ class EventDispatcher
                 if (preg_match($pattern, $text, $matches)) {
                     return [
                         'actionClass' => $actionClass,
-                        'actionArgs' => array_slice($matches, 1)
+                        'actionArgs' => array_slice($matches, 1),
                     ];
                 }
             }
@@ -144,7 +151,7 @@ class EventDispatcher
         if ($this->fallbackAction) {
             return [
                 'actionClass' => $this->fallbackAction,
-                'actionArgs' => []
+                'actionArgs' => [],
             ];
         }
 
@@ -155,8 +162,17 @@ class EventDispatcher
     {
         $this->vk->data = $event;
         $this->vk->initText($text)->initUserID($userId)->initPeerID($peerId)->initData($rawEvent);
-//        var_dump($text, $userId, $peerId, $rawEvent);
-        return new Context($this->vk, $this, $this->argumentResolver, (object)$rawEvent, $userId, $peerId, $text, $this->factory);
+        //        var_dump($text, $userId, $peerId, $rawEvent);
+        return new Context(
+            $this->vk,
+            $this,
+            $this->argumentResolver,
+            (object) $rawEvent,
+            $userId,
+            $peerId,
+            $text,
+            $this->factory,
+        );
     }
 
     /**
@@ -185,7 +201,6 @@ class EventDispatcher
             $middlewareStack = $actionMiddleware;
         }
 
-
         $finalHandler = function (Context $ctx) use ($instance, $reflectionClass, $actionClass, $actionArgs) {
             if (method_exists($instance, 'before')) {
                 $reflectionMethod = $reflectionClass->getMethod('before');
@@ -207,14 +222,12 @@ class EventDispatcher
         //Собирает конвеер вызовов в виде луковицы. Вызовы сначала глобальных, потом #[UseMiddleware]
         $pipeline = array_reduce(
             array_reverse($middlewareStack),
-            function ($next, $middlewareClass) use ($context) {
-                return function (Context $ctx) use ($next, $middlewareClass, $context) {
-                    /** @var MiddlewareInterface $middlewareInstance */
-                    $middlewareInstance = $this->createInstance($middlewareClass, $context);
-                    $middlewareInstance->process($ctx, $next);
-                };
+            fn($next, $middlewareClass) => function (Context $ctx) use ($next, $middlewareClass, $context) {
+                /** @var MiddlewareInterface $middlewareInstance */
+                $middlewareInstance = $this->createInstance($middlewareClass, $context);
+                $middlewareInstance->process($ctx, $next);
             },
-            $finalHandler
+            $finalHandler,
         );
 
         $pipeline($context);
@@ -238,10 +251,10 @@ class EventDispatcher
             try {
                 $instance = $context->get($className);
             } catch (Throwable $e) {
-                if($this->config->debug){
+                if ($this->config->debug) {
                     trigger_error(
                         "Диспетчер: Настроенная фабрика/DI-контейнер не смог создать экземпляр класса '{$className}'. Ошибка: {$e->getMessage()}",
-                        E_USER_WARNING
+                        E_USER_WARNING,
                     );
                 }
             }
@@ -261,11 +274,13 @@ class EventDispatcher
                 }
             } catch (Throwable $e) {
                 throw new RuntimeException(
-                    "Диспетчер: Не удалось создать экземпляр класса '{$className}' через рефлексию. " .
-                    "Проверьте его конструктор и зависимости. Исходная ошибка: " . $e->getMessage(),0, $e
+                    "Диспетчер: Не удалось создать экземпляр класса '{$className}' через рефлексию. "
+                        . 'Проверьте его конструктор и зависимости. Исходная ошибка: '
+                        . $e->getMessage(),
+                    0,
+                    $e,
                 );
             }
-
         }
         return $instance;
     }
@@ -298,13 +313,13 @@ class EventDispatcher
                 // Если нет, будет вызвана автозагрузка. Если автозагрузка не найдет класс, будет выброшено исключение.
                 $reflection = new ReflectionClass($className);
             } catch (ReflectionException) {
-//                if ($this->config->debug) {
+                //                if ($this->config->debug) {
                 throw new LogicException(
-                    "Диспетчер: Не удалось найти или загрузить класс '{$className}', который был определён в файле '{$filePath}'.\n" .
-                    "Убедитесь, что пространство имён (namespace) в файле соответствует его расположению в директории (согласно PSR-4), " .
-                    "а также что выполнена команда 'composer dump-autoload'."
+                    "Диспетчер: Не удалось найти или загрузить класс '{$className}', который был определён в файле '{$filePath}'.\n"
+                    . 'Убедитесь, что пространство имён (namespace) в файле соответствует его расположению в директории (согласно PSR-4), '
+                    . "а также что выполнена команда 'composer dump-autoload'.",
                 );
-//                }
+                //                }
                 continue;
             }
             if ($reflection->isAbstract()) {
@@ -334,9 +349,9 @@ class EventDispatcher
                     if (isset($this->routeMap['command'][$instance->command])) {
                         $existingHandler = $this->routeMap['command'][$instance->command];
                         throw new LogicException(
-                            "Дублирующаяся команда '{$instance->command}'.\n" .
-                            "Она уже обрабатывается классом '{$existingHandler}'.\n" .
-                            "Конфликт с классом '{$className}'."
+                            "Дублирующаяся команда '{$instance->command}'.\n"
+                            . "Она уже обрабатывается классом '{$existingHandler}'.\n"
+                            . "Конфликт с классом '{$className}'.",
                         );
                     }
                     $this->routeMap['command'][$instance->command] = $className;
@@ -345,9 +360,9 @@ class EventDispatcher
                     if (isset($this->routeMap['regex'][$instance->pattern])) {
                         $existingHandler = $this->routeMap['regex'][$instance->pattern];
                         throw new LogicException(
-                            "Дублирующийся паттерн (регулярное выражение) '{$instance->pattern}'.\n" .
-                            "Он уже обрабатывается классом '{$existingHandler}'.\n" .
-                            "Конфликт с классом '{$className}'."
+                            "Дублирующийся паттерн (регулярное выражение) '{$instance->pattern}'.\n"
+                            . "Он уже обрабатывается классом '{$existingHandler}'.\n"
+                            . "Конфликт с классом '{$className}'.",
                         );
                     }
                     $this->routeMap['regex'][$instance->pattern] = $className;
@@ -357,10 +372,10 @@ class EventDispatcher
             if ($reflection->getAttributes(Fallback::class)) {
                 if ($this->fallbackAction !== null) {
                     throw new LogicException(
-                        "Обнаружен дублирующийся резервный обработчик (Fallback).\n" .
-                        "Он уже назначен классу '{$this->fallbackAction}'.\n" .
-                        "Конфликт с классом '{$className}'. " .
-                        "В системе может быть только один fallback-обработчик."
+                        "Обнаружен дублирующийся резервный обработчик (Fallback).\n"
+                        . "Он уже назначен классу '{$this->fallbackAction}'.\n"
+                        . "Конфликт с классом '{$className}'. "
+                        . 'В системе может быть только один fallback-обработчик.',
                     );
                 }
                 $this->fallbackAction = $className;

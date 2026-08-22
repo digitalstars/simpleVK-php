@@ -1,10 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\EventDispatcher;
 
+use Closure;
 use DigitalStars\SimpleVK\Message;
 use DigitalStars\SimpleVK\SimpleVK;
-use Closure;
 use DigitalStars\SimpleVK\SimpleVkException;
 use ReflectionClass;
 use RuntimeException;
@@ -29,8 +31,7 @@ class Context
          * @var callable|null
          */
         private readonly ?Closure $factory = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Возвращает значение атрибута.
@@ -64,13 +65,13 @@ class Context
      */
     public function get(string $className): object
     {
-        if($className === __CLASS__) { //Context
+        if ($className === __CLASS__) { //Context
             return $this;
         }
 
         if (!is_callable($this->factory)) {
             throw new RuntimeException(
-                'The dependency resolver (factory/container) is not available in the current context.'
+                'The dependency resolver (factory/container) is not available in the current context.',
             );
         }
 

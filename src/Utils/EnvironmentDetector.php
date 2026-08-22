@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\Utils;
 
 /**
@@ -26,9 +29,7 @@ final class EnvironmentDetector
     /**
      * Предотвращение создание экземпляра класса, потому что только статическое использование.
      */
-    private function __construct()
-    {
-    }
+    private function __construct() {}
 
     /**
      * Определяет и возвращает текущую среду выполнения.

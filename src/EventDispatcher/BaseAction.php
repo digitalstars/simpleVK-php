@@ -1,9 +1,8 @@
 <?php
-namespace DigitalStars\SimpleVK\EventDispatcher;
 
-use DigitalStars\SimpleVK\Message;
-use DigitalStars\SimpleVK\SimpleVkException;
-use ReflectionClass;
+declare(strict_types=1);
+
+namespace DigitalStars\SimpleVK\EventDispatcher;
 
 abstract class BaseAction implements ActionInterface
 {

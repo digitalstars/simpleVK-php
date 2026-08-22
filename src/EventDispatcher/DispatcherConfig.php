@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\EventDispatcher;
+
 use Closure;
 use InvalidArgumentException;
-use Psr\SimpleCache\CacheInterface;
 use Psr\Container\ContainerInterface;
+use Psr\SimpleCache\CacheInterface;
 
 class DispatcherConfig
 {
@@ -20,25 +23,24 @@ class DispatcherConfig
     public function __construct(
         array|string $actionsPaths,
         public readonly bool $debug = false,
-        public readonly ?CacheInterface $cache = null
+        public readonly ?CacheInterface $cache = null,
     ) {
         $this->actionsPaths = is_string($actionsPaths) ? [$actionsPaths] : $actionsPaths;
         $this->validatePaths();
     }
 
-
     private function validatePaths(): void
     {
         if (empty($this->actionsPaths)) {
             throw new InvalidArgumentException(
-                "Ошибка конфигурации диспетчера: массив путей (actionsPaths) не может быть пустым."
+                'Ошибка конфигурации диспетчера: массив путей (actionsPaths) не может быть пустым.',
             );
         }
 
         foreach ($this->actionsPaths as $path) {
             if (!is_string($path) || !is_dir($path)) {
                 throw new InvalidArgumentException(
-                    "Ошибка конфигурации диспетчера: указанный путь '{$path}' не существует или не является директорией."
+                    "Ошибка конфигурации диспетчера: указанный путь '{$path}' не существует или не является директорией.",
                 );
             }
         }
@@ -64,7 +66,7 @@ class DispatcherConfig
      */
     public function withContainer(ContainerInterface $container): self
     {
-        $this->factory = static fn(string $class) => $container->get($class);
+        $this->factory = $container->get(...);
         return $this;
     }
 

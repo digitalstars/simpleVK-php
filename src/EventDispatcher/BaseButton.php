@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\EventDispatcher;
 
 abstract class BaseButton extends BaseAction
@@ -8,10 +11,25 @@ abstract class BaseButton extends BaseAction
     protected ?string $type = 'text';
     protected array $payload = [];
 
-    public function getLabel(): ?string { return $this->label; }
-    public function getColor(): ?string { return $this->color; }
-    public function getType(): ?string { return $this->type; }
-    public function getPayload(): array { return $this->payload; }
+    public function getLabel(): ?string
+    {
+        return $this->label;
+    }
+
+    public function getColor(): ?string
+    {
+        return $this->color;
+    }
+
+    public function getType(): ?string
+    {
+        return $this->type;
+    }
+
+    public function getPayload(): array
+    {
+        return $this->payload;
+    }
 
     public function label(string $label): self
     {

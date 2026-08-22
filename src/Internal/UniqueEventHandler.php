@@ -1,17 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\Internal;
 
 use Exception;
 use LogicException;
+use Psr\SimpleCache\CacheInterface;
 use Psr\SimpleCache\InvalidArgumentException;
+use Redis;
 use RuntimeException;
 use Symfony\Component\Cache\Adapter\RedisAdapter;
 use Symfony\Component\Cache\Psr16Cache;
-use Psr\SimpleCache\CacheInterface;
-use Redis;
 
-class UniqueEventHandler {
+class UniqueEventHandler
+{
     private static ?CacheInterface $cache = null;
     private static int $cache_ttl; // 3 дня
     private static bool $is_enabled = false;
@@ -29,7 +32,7 @@ class UniqueEventHandler {
         ?CacheInterface $cache = null,
         string $redis_host = 'localhost',
         int $redis_port = 6379,
-        int $cache_ttl = 259200
+        int $cache_ttl = 259_200,
     ): void {
         self::$cache_ttl = $cache_ttl;
 
@@ -77,7 +80,7 @@ class UniqueEventHandler {
     private static function createDefaultRedisCache(string $host, int $port): CacheInterface
     {
         if (!class_exists(Redis::class) || !extension_loaded('redis')) {
-            throw new LogicException("Для работы кэша по умолчанию необходимо расширение ext-redis.");
+            throw new LogicException('Для работы кэша по умолчанию необходимо расширение ext-redis.');
         }
 
         try {
@@ -89,7 +92,11 @@ class UniqueEventHandler {
             // Оборачиваем его в PSR-16 совместимый кеш
             return new Psr16Cache($psr6Cache);
         } catch (Exception $e) {
-            throw new RuntimeException("Не удалось подключиться к Redis на {$host}:{$port}\n".$e->getMessage(), 0, $e);
+            throw new RuntimeException(
+                "Не удалось подключиться к Redis на {$host}:{$port}\n" . $e->getMessage(),
+                0,
+                $e,
+            );
         }
     }
 }

@@ -1,7 +1,8 @@
 <?php
-namespace DigitalStars\SimpleVK\EventDispatcher;
 
-use DigitalStars\SimpleVK\Message;
+declare(strict_types=1);
+
+namespace DigitalStars\SimpleVK\EventDispatcher;
 
 abstract class BaseView
 {

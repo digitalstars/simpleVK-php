@@ -1,15 +1,19 @@
 <?php
 
-namespace DigitalStars\SimpleVK\EventDispatcher;
-use DigitalStars\SimpleVK\Psr\SimpleCache\CacheInterface;
+declare(strict_types=1);
 
+namespace DigitalStars\SimpleVK\EventDispatcher;
+
+use DigitalStars\SimpleVK\Psr\SimpleCache\CacheInterface;
 use ReflectionFunctionAbstract;
+
 class ArgumentResolver
 {
     private array $metadataCache = [];
-    public function __construct(private readonly ?CacheInterface $persistentCache = null)
-    {
-    }
+
+    public function __construct(
+        private readonly ?CacheInterface $persistentCache = null,
+    ) {}
 
     /**
      * Получает метаданные о параметрах метода, используя кэш.
@@ -50,7 +54,6 @@ class ArgumentResolver
         return $paramsData;
     }
 
-
     /**
      * Собирает массив аргументов для вызова метода.
      *
@@ -60,8 +63,11 @@ class ArgumentResolver
      * @return array Готовый массив аргументов для вызова.
      * @throws \Exception
      */
-    public function getArguments(\ReflectionFunctionAbstract $reflectionMethod, Context $context, array $availableArgs = []): array
-    {
+    public function getArguments(
+        \ReflectionFunctionAbstract $reflectionMethod,
+        Context $context,
+        array $availableArgs = [],
+    ): array {
         $finalArgs = [];
 
         $methodParams = $this->getMethodParameters($reflectionMethod);
@@ -112,8 +118,11 @@ class ArgumentResolver
                 continue;
             }
 
-            $controllerName = $reflectionMethod->getDeclaringClass()?->getName() . '::' . $reflectionMethod->getName() . '()';
-            throw new \RuntimeException("Не удалось определить значение для параметра '{$paramName}' в методе '{$controllerName}'.");
+            $controllerName =
+                $reflectionMethod->getDeclaringClass()?->getName() . '::' . $reflectionMethod->getName() . '()';
+            throw new \RuntimeException(
+                "Не удалось определить значение для параметра '{$paramName}' в методе '{$controllerName}'.",
+            );
         }
 
         return $finalArgs;
