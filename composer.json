@@ -44,7 +44,8 @@
     "require-dev": {
         "roave/security-advisories": "dev-latest",
         "ext-openssl": "*",
-        "vimeo/psalm": "^7.0.0-beta6"
+        "vimeo/psalm": "^7.0",
+        "carthage-software/mago": "^1.0"
     },
     "suggest": {
         "ext-redis": "Для обнаружения дублирующихся событий от VK API и их игнорирования",

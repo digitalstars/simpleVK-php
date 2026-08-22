@@ -1,0 +1,94 @@
+#:schema https://mago.carthage.software/1.47.3/schema.json
+# Конфигурация Mago для библиотеки SimpleVK.
+# Адаптирован из E:\PhpstormProjects\tower_bot\mago.toml (см. docs-заметки tower_bot).
+version = "1"
+# Минимальная версия PHP, поддерживаемая библиотекой (см. composer.json)
+php-version = "8.2.0"
+
+[source]
+paths    = ["src"]
+includes = ["vendor"]
+excludes = [
+    "vendor/composer/**",
+]
+
+[source.glob]
+literal-separator = true
+
+[formatter]
+preset = "default"
+
+[linter]
+minimum-fail-level = "warning"
+
+[linter.rules]
+strict-types = { enabled = true, level = "error" }
+no-eval = { enabled = true, level = "error" }
+no-global = { enabled = true, level = "error" }
+no-error-control-operator = { enabled = true, level = "warning" }
+no-multi-assignments = { enabled = true, level = "warning" }
+
+# Вкусовщина / не применимо к legacy-коду библиотеки
+no-boolean-flag-parameter = { enabled = false }
+prefer-early-continue = { enabled = false }
+no-else-clause = { enabled = false }
+prefer-early-return = { enabled = false }
+too-many-methods = { enabled = false }
+cyclomatic-complexity = { enabled = false }
+excessive-parameter-list = { enabled = false }
+too-many-properties = { enabled = false }
+ambiguous-function-call = { enabled = false }
+literal-named-argument = { enabled = false }
+halstead = { effort-threshold = 12000, volume-threshold = 2000 }
+kan-defect = { enabled = false }
+
+[analyzer]
+ignore = [
+    # Данные из VK API приходят нетипизированными — это домен библиотеки
+    "mixed-method-access",
+    "mixed-property-access",
+    "mixed-argument",
+    "mixed-assignment",
+    "mixed-operand",
+    "mixed-array-access",
+    "mixed-return-statement",
+    "invalid-type-cast",
+    "imprecise-type",
+    "possibly-false-operand",
+    "possibly-null-argument",
+    "possibly-null-array-index",
+    "incompatible-parameter-type",
+    "mixed-property-type-coercion",
+    "property-type-coercion",
+    # Снимется после типизации attachment() (заметки tower_bot: SIMPLEVK_MAGO_NOTES.md)
+    "too-many-arguments",
+    "unevaluated-code",
+    "non-existent-class-constant",
+    "no-value",
+    "invalid-operand",
+    "less-specific-argument",
+    "less-specific-nested-argument-type",
+    "less-specific-nested-return-statement",
+    "invalid-callable",
+    "possibly-null-property-access",
+]
+
+find-unused-definitions = false
+find-unused-expressions = false
+find-unused-parameters = false
+analyze-dead-code = false
+
+strict-list-index-checks = false
+strict-array-index-existence = false
+allow-array-truthy-operand = false
+no-boolean-literal-comparison = false
+
+unchecked-exceptions = ["Error", "LogicException"]
+unchecked-exception-classes = []
+check-throws = false
+check-missing-override = false
+
+check-missing-type-hints = true
+check-property-initialization = false
+memoize-properties = true
+register-super-globals = true
