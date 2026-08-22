@@ -3,24 +3,16 @@
 namespace DigitalStars\SimpleVK;
 
 use Exception;
-use Throwable;
 use RuntimeException;
+use Throwable;
 
 require_once('config_simplevk.php');
 
 class SimpleVkException extends Exception {
-    /**
-     * Флаг, определяющий, нужно ли логировать ошибки.
-     *
-     * @var bool
-     */
-
+    /** Флаг, определяющий, нужно ли логировать ошибки в файл. */
     private static bool $log_errors = true;
-    /**
-     * Директория для хранения файлов логов.
-     *
-     * @var ?string
-     */
+
+    /** Директория для хранения файлов логов. */
     private static ?string $error_dir_path = null;
 
     public function __construct(int $code, string $message, ?Throwable $previous = null) {
@@ -29,8 +21,7 @@ class SimpleVkException extends Exception {
 
     /**
      * Выключить логирование ошибок в файл.
-     * По умолчанию ошибки записываются
-     * @return void
+     * По умолчанию ошибки записываются.
      */
     public static function disableWriteError(): void {
         self::$log_errors = false;
@@ -38,8 +29,6 @@ class SimpleVkException extends Exception {
 
     /**
      * Устанавливает путь к директории для логов (относительный или абсолютный).
-     * @param string $path
-     * @return void
      */
     public static function setErrorDirPath(string $path): void {
         $real_path = realpath($path);
@@ -53,41 +42,35 @@ class SimpleVkException extends Exception {
 
     /**
      * Логирует произвольное сообщение об ошибке.
-     *
-     * @param string $message Сообщение.
-     * @return void
      */
     public static function logCustomError(string $message): void {
-        if(self::$log_errors) {
+        if (self::$log_errors) {
             self::ensureErrorDirectoryExists();
-            $log_message = self::formatCustomError($message);
-            self::appendLog($log_message);
+            self::appendLog(self::formatCustomError($message));
         }
     }
 
     /**
      * Возвращает корневую директорию, основываясь на параметрах запуска.
-     *
-     * @return string
      */
     private static function getRootDirectory(): string {
-        if (!empty($_SERVER['SCRIPT_FILENAME'])) { //CLI + Webserver, но не любой
-            return dirname(realpath($_SERVER['SCRIPT_FILENAME']));
+        if (!empty($_SERVER['SCRIPT_FILENAME'])) { // CLI + Webserver, но не любой
+            $script = realpath($_SERVER['SCRIPT_FILENAME']);
+            if ($script !== false) {
+                return dirname($script);
+            }
         }
 
-        if (!empty($_SERVER['argv'][0])) { //CLI 100% получение
-            return dirname(realpath($_SERVER['argv'][0]));
+        if (!empty($_SERVER['argv'][0])) { // CLI 100% получение
+            $argv0 = realpath($_SERVER['argv'][0]);
+            if ($argv0 !== false) {
+                return dirname($argv0);
+            }
         }
 
-        return getcwd(); //крайний вариант директория, в которой выполняют команду
+        return getcwd(); // крайний вариант - директория, в которой выполняют команду
     }
 
-    /**
-     * Форматирует сообщение для произвольного лога.
-     *
-     * @param string $message Сообщение.
-     * @return string
-     */
     private static function formatCustomError(string $message): string {
         return sprintf(
             "[Exception] %s\n%s\n\n",
@@ -97,7 +80,7 @@ class SimpleVkException extends Exception {
     }
 
     private static function appendLog(string $log_message): void {
-        if(!self::$error_dir_path) {
+        if (!self::$error_dir_path) {
             self::$error_dir_path = self::getRootDirectory() . DIRECTORY_SEPARATOR . 'errors';
         }
         $log_file = self::$error_dir_path . DIRECTORY_SEPARATOR . "error_log" . date('Y-m-d') . ".php";
@@ -110,9 +93,6 @@ class SimpleVkException extends Exception {
 
     /**
      * Создаёт файл лога, если он не существует.
-     *
-     * @param string $file_path Путь к файлу.
-     * @return void
      */
     private static function createLogFileIfNotExists(string $file_path): void {
         if (!file_exists($file_path)) {
@@ -126,12 +106,10 @@ class SimpleVkException extends Exception {
     /**
      * Проверяет наличие директории для логов и создаёт её, если необходимо.
      *
-     * @param string|null $dir_path Необязательный путь к директории.
      * @throws RuntimeException Если создать директорию не удалось.
-     * @return void
      */
     private static function ensureErrorDirectoryExists(?string $dir_path = null): void {
-        if(!self::$error_dir_path) {
+        if (!self::$error_dir_path) {
             self::$error_dir_path = self::getRootDirectory() . DIRECTORY_SEPARATOR . 'errors';
         }
         $directory = $dir_path ?? self::$error_dir_path;
@@ -141,10 +119,10 @@ class SimpleVkException extends Exception {
     }
 
     private static function throwLogCreationError(?string $object = null, ?string $path = null, ?string $custom_message = null): void {
-        if($custom_message) {
+        if ($custom_message !== null) {
             $message = $custom_message;
         } else {
-            $directory = dirname($path);
+            $directory = dirname((string)$path);
             $message = sprintf(
                 "Не удалось создать %s логов ошибок по пути:\n%s\n\n" .
                 "Возможные варианты решения:\n" .
@@ -155,8 +133,7 @@ class SimpleVkException extends Exception {
             );
         }
 
-        self::disableWriteError(); //выключаем, чтобы не появилась бесконечная рекурсия попыток записи ошибки
+        self::disableWriteError(); // выключаем, чтобы не появилась бесконечная рекурсия попыток записи ошибки
         throw new RuntimeException($message);
     }
-
 }

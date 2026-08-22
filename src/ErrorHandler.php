@@ -9,10 +9,15 @@ use DigitalStars\SimpleVK\Utils\EnvironmentDetector;
 use ErrorException;
 use Throwable, Exception;
 
+/**
+ * Обработчик ошибок и исключений: форматированный трейс со сниппетами кода,
+ * вывод в консоль/веб, логирование и отправка в ЛС ВК.
+ */
 trait ErrorHandler
 {
 
-    private Closure|array|null $user_error_handler_or_ids = null;
+    /** @var Closure|array<int>|int|null VK ID (или массив/колбэк), куда отправлять ошибки. */
+    private Closure|array|null|int $user_error_handler_or_ids = null;
 
     private array $paths_to_filter = [];
 
@@ -30,8 +35,9 @@ trait ErrorHandler
 
     /**
      * Устанавливает обработчик ошибок и исключений, перенаправляя их для логирования и вывода.
+     *
      * @param int|array<int>|callable $ids VK ID пользователя, массив ID или функция-обработчик.
-     * @return SimpleVK|ErrorHandler|LongPoll Возвращает текущий экземпляр для цепочки вызовов.
+     * @return self Возвращает текущий экземпляр для цепочки вызовов.
      */
     public function setUserLogError(callable|array|int $ids): self
     {
@@ -39,25 +45,22 @@ trait ErrorHandler
 
         ini_set('error_reporting', E_ALL);
 
-        // Перенаправляет ошибки в файл, а не в stderr
-        // ini_set('error_log', '/path/to/php-error.log');
-
-        // Отключаем стандартные механизмы PHP, так как либа полностью берет их на себя.
+        // Отключаем стандартные механизмы PHP, так как либа полностью берёт их на себя.
         ini_set('display_errors', 0);
         ini_set('display_startup_errors', 0);
         ini_set('log_errors', 0); // Либа логирует сама, поэтому отключаем стандартное логирование.
 
-        set_error_handler([$this, 'userErrorHandler']); //Для пользовательских ошибок и всех нефатальных
-        set_exception_handler([$this, 'exceptionHandler']); //Для необработанных исключений
-        //Для обнаружения фатальных ошибок, из-за которых не успевают сработать обычные обработчики
+        set_error_handler([$this, 'userErrorHandler']); // Для пользовательских ошибок и всех нефатальных
+        set_exception_handler([$this, 'exceptionHandler']); // Для необработанных исключений
+        // Для обнаружения фатальных ошибок, из-за которых не успевают сработать обычные обработчики
         register_shutdown_function(fn() => $this->checkForFatalError());
         return $this;
     }
 
     /**
-     * Устанавливает пути к файлам, которые необходимо убрать из трейса
-     * @param string|array $pathes Путь или массив путей
-     * @return void
+     * Устанавливает пути к файлам, которые необходимо убрать из трейса.
+     *
+     * @param string|array<string> $pathes Путь или массив путей.
      */
     public function setTracePathFilter(string|array $pathes): void
     {
@@ -66,9 +69,9 @@ trait ErrorHandler
     }
 
     /**
-     * Оставляет в трейсе только пользовательские файлы, без файлов библиотеки
-     * @param bool $enable - вкл/выкл отображение короткого трейса
-     * @return SimpleVK|ErrorHandler|LongPoll Возвращает текущий экземпляр для цепочки вызовов.
+     * Оставляет в трейсе только пользовательские файлы, без файлов библиотеки.
+     *
+     * @return self Возвращает текущий экземпляр для цепочки вызовов.
      */
     public function shortTrace(bool $enable = true): self
     {
@@ -86,7 +89,7 @@ trait ErrorHandler
         $message = $this->normalizeMessage($exception->getMessage());
         $message = $this->filterPaths($message);
         $file = $this->normalizeMessage($exception->getFile());
-        $line = (int) $this->normalizeMessage($exception->getLine()); // Приведение к int для надежности
+        $line = (int)$this->normalizeMessage((string)$exception->getLine()); // Приведение к int для надежности
         $code = $exception->getCode();
 
         $this->userErrorHandler(
@@ -123,39 +126,39 @@ trait ErrorHandler
 
         $trace_data = $exception->getTrace();
 
-        // --- 2. Определение уровня и типа ошибки ---
+        // --- Определение уровня и типа ошибки ---
         [$error_level, $error_type] = $this->defaultErrorLevelMap()[$type] ?? ['NOTICE', 'UNKNOWN'];
 
         $trace_model = $this->prepareTraceModel($trace_data, $file, $line, $exception);
 
-        // 2. РЕНДЕРИНГ ТРЕЙСОВ
+        // --- РЕНДЕРИНГ ТРЕЙСОВ ---
         $console_trace = $this->renderTrace($trace_model, with_colors: true, shorten_paths: false);
         $vk_trace = $this->renderTrace($trace_model, with_colors: false, shorten_paths: true);
         $plain_trace = $this->renderTrace($trace_model, with_colors: false, shorten_paths: false);
 
-        // 3. ФОРМИРОВАНИЕ ЗАГОЛОВКОВ
+        // --- ФОРМИРОВАНИЕ ЗАГОЛОВКОВ ---
         $console_header = $this->formatErrorLevel($error_level) . $message;
         $plain_header   = strip_tags(preg_replace('/\033\[[0-9;]*m/', '', $console_header));
 
-        // 4. СБОРКА ФИНАЛЬНЫХ СООБЩЕНИЙ
+        // --- СБОРКА ФИНАЛЬНЫХ СООБЩЕНИЙ ---
         $console_message = "$console_header\n\n$console_trace";
         $plain_message   = "$plain_header\n\n$plain_trace";
         $vk_message      = "$plain_header\n\n$vk_trace";
 
-        // --- 4. Логирование ---
+        // --- Логирование ---
         if ($this->shouldLogException($exception, $code)) {
             SimpleVkException::logCustomError($vk_message);
         }
 
-        // --- 5. Вывод в консоль/веб/лог ---
+        // --- Вывод в консоль/веб/лог ---
         $this->displayError($console_message, $plain_message);
 
-        // --- 5. Отправка ошибки в чат ВК ---
+        // --- Отправка ошибки в чат ВК ---
         $this->dispatchErrorMessage($error_type, $vk_message, $code, $exception);
 
         // Завершение работы при критических ошибках
-        if (in_array($error_level, ['ERROR', 'CRITICAL'])) {
-            $this->isAlreadyExiting = true; //чтобы не сработала register_shutdown_function()
+        if (in_array($error_level, ['ERROR', 'CRITICAL'], true)) {
+            $this->isAlreadyExiting = true; // чтобы не сработала register_shutdown_function()
             exit(1);
         }
 
@@ -203,6 +206,9 @@ trait ErrorHandler
         }
     }
 
+    /**
+     * @return array<string, array{0:string, 1:string}>
+     */
     private function defaultErrorLevelMap(): array
     {
         return [
@@ -235,7 +241,7 @@ trait ErrorHandler
 
     private function coloredLog(string $text, string $color): string
     {
-        $color_codes = [
+        static $color_codes = [
             'RED' => "\033[31m",
             'GREEN' => "\033[32m",
             'YELLOW' => "\033[33m",
@@ -243,10 +249,13 @@ trait ErrorHandler
             'WHITE' => "\033[37m",
         ];
         $color_reset = "\033[0m";
-        $color_code = $color_codes[$color];
+        $color_code = $color_codes[$color] ?? '';
         return "{$color_code}{$text}{$color_reset}";
     }
 
+    /**
+     * Отправляет отформатированную ошибку пользовательскому колбэку или в ЛС ВК.
+     */
     private function dispatchErrorMessage(
         string $type,
         string $message,
@@ -255,19 +264,18 @@ trait ErrorHandler
     ): void {
         if (is_callable($this->user_error_handler_or_ids)) {
             call_user_func($this->user_error_handler_or_ids, $type, $message, $code, $exception);
-        } else {
+        } elseif (is_array($this->user_error_handler_or_ids) && $this->user_error_handler_or_ids !== []) {
             $peer_ids = implode(',', $this->user_error_handler_or_ids);
             if ($this->send_error_in_vk) {
                 try {
-                    //Ошибки не вызываются при недоставке юзеру, потому что у peer_ids другой формат ответа
-                    $this->request('messages.send', [ //отправка ошибки в ВК
+                    // Ошибки не вызываются при недоставке юзеру, потому что у peer_ids другой формат ответа
+                    $this->request('messages.send', [ // отправка ошибки в ВК
                         'peer_ids' => $peer_ids,
                         'message' => $message,
                         'random_id' => 0,
                         'dont_parse_links' => 1
                     ], use_placeholders: false);
                 } catch (Exception $e) {
-                    //$this->send_error_in_vk = false; // это проблема для longpoll
                     trigger_error('Не удалось отправить ошибку в ЛС: ' . $e->getMessage(), E_USER_WARNING);
                 }
             }
@@ -301,7 +309,7 @@ trait ErrorHandler
         $snippet_lines = [];
         for ($i = $start; $i < $end; $i++) {
             $line_number_text = ($i + 1) . ': ';
-            $code_text = trim($lines[$i]);
+            $code_text = trim((string)$lines[$i]);
 
             if ($with_colors) {
                 $line_number = $this->coloredLog($line_number_text, 'YELLOW');
@@ -318,39 +326,6 @@ trait ErrorHandler
     private function normalizeMessage(string $message): string
     {
         return $message;
-        /*
-        $message = preg_replace('/Array\s*\n?\s*\(/i', '[', $message);
-
-        $message = str_replace(')', ']', $message);
-
-        $lines = explode("\n", $message);
-
-        $result = [];
-
-
-        foreach ($lines as $line) {
-            // Определяем количество пробелов в начале строки
-            $leadingSpaces = strspn($line, ' ');
-
-            if ($leadingSpaces > 0) {
-                // Базовое сокращение пробелов в половину
-                $newIndent = floor($leadingSpaces / 2);
-
-                // Если после пробелов идет '[', уменьшаем еще на 1
-                if (isset($line[$leadingSpaces]) && $line[$leadingSpaces] === '[') {
-                    $newIndent = max(0, $newIndent + 2);
-                }
-
-                // Формируем новую строку с уменьшенным отступом
-                $content = substr($line, $leadingSpaces);
-                $line = str_repeat(' ', $newIndent) . $content;
-            }
-
-            $result[] = rtrim($line); // Удаляем пробелы в конце строки
-        }
-
-        return trim(implode("\n", $result));
-        */
     }
 
     private function filterPaths(string $path): string
@@ -362,21 +337,24 @@ trait ErrorHandler
         return $path;
     }
 
+    /**
+     * @param array<int, array> $trace_data
+     * @return array<int, array>
+     */
     private function prepareTraceModel(array $trace_data, string $file, int $line, Throwable $exception): array
     {
         $first_frame = $trace_data[0] ?? null;
         $original_trace = $exception->getTrace();
 
-        // Проверяем, существует ли первый кадр и является ли он вызовом обработчика
-        // Дополнительно проверяем, является ли это внутренним вызовом (без файла)
+        // Проверяем, существует ли первый кадр и является ли он вызовом обработчика.
+        // Дополнительно проверяем, является ли это внутренним вызовом (без файла).
         // Это характерно именно для trigger_error
         if ($first_frame && ($first_frame['function'] ?? '') === 'userErrorHandler' && !isset($first_frame['file'])) {
             // Удаляем этот бесполезный первый кадр
             array_shift($trace_data);
         }
 
-        // Иногда основная точка ошибки не является первой в трейсе.
-        // Добавляем ее в начало, если это не так.
+        // Иногда основная точка ошибки не является первой в трейсе. Добавляем её в начало, если это не так.
         if (!empty($original_trace) && isset($trace_data[0])) {
             $first_trace = $trace_data[0];
             if (($first_trace['file'] ?? '') !== $file || ($first_trace['line'] ?? 0) !== $line) {
@@ -413,8 +391,8 @@ trait ErrorHandler
             $snippet_colored = '';
             $snippet_plain = '';
             if (!$is_internal) {
-                $snippet_colored = $this->getCodeSnippet($file_path, $data['line'], 0, true);
-                $snippet_plain   = $this->getCodeSnippet($file_path, $data['line'], 0, false);
+                $snippet_colored = $this->getCodeSnippet($file_path, (int)($data['line'] ?? 0), 0, true);
+                $snippet_plain   = $this->getCodeSnippet($file_path, (int)($data['line'] ?? 0), 0, false);
             }
 
             $trace_model[] = [
@@ -435,10 +413,7 @@ trait ErrorHandler
     /**
      * Рендерит модель трейса в строку с заданными параметрами форматирования.
      *
-     * @param array $trace_model Подготовленная модель трейса.
-     * @param bool $with_colors Добавлять ли ANSI-коды цветов.
-     * @param bool $shorten_paths Сокращать ли пути к файлам.
-     * @return string
+     * @param array<int, array> $trace_model Подготовленная модель трейса.
      */
     private function renderTrace(array $trace_model, bool $with_colors, bool $shorten_paths): string
     {
