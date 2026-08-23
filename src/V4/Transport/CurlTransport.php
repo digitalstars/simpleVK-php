@@ -29,7 +29,7 @@ final class CurlTransport implements Transport
 
         $ch = \curl_init();
         \curl_setopt_array($ch, [
-            \CURLOPT_URL => $this->baseUrl . $method,
+            \CURLOPT_URL => \rtrim($this->baseUrl, '/') . '/' . $method,
             \CURLOPT_POST => true,
             \CURLOPT_POSTFIELDS => \http_build_query($params),
             \CURLOPT_RETURNTRANSFER => true,
@@ -39,28 +39,28 @@ final class CurlTransport implements Transport
             \CURLOPT_FOLLOWLOCATION => false,
         ]);
 
-        try {
-            $body = \curl_exec($ch);
-            $errno = \curl_errno($ch);
-            $error = \curl_error($ch);
+        $body = \curl_exec($ch);
+        $errno = \curl_errno($ch);
+        $error = \curl_error($ch);
 
-            if ($body === false) {
-                throw new SimpleVkException(
-                    SimpleVkException::TRANSPORT_ERROR,
-                    "Сбой сети при вызове VK API ({$method}): [{$errno}] {$error}",
-                );
-            }
-
-            return self::decode((string) $body, $method);
-        } finally {
-            \curl_close($ch);
+        if ($body === false) {
+            throw new SimpleVkException(
+                SimpleVkException::TRANSPORT_ERROR,
+                "Сбой сети при вызове VK API ({$method}): [{$errno}] {$error}",
+            );
         }
+
+        return self::decode((string) $body, $method);
     }
 
     /**
+     * Декодирование ответа вынесено публично для юнит-тестов.
+     *
+     * @internal
+     *
      * @return array<string, mixed>
      */
-    private static function decode(string $body, string $method): array
+    public static function decode(string $body, string $method): array
     {
         try {
             $decoded = \json_decode($body, true, flags: \JSON_THROW_ON_ERROR);

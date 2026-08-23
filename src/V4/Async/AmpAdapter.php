@@ -2,13 +2,12 @@
 
 namespace DigitalStars\SimpleVK\V4\Async;
 
-use Amp\Future;
 use Amp\Http\Client\HttpClient;
 use Amp\Http\Client\HttpClientBuilder;
 use Amp\Http\Client\Request;
 use DigitalStars\SimpleVK\V4\ApiClient;
+use DigitalStars\SimpleVK\V4\Bot;
 use DigitalStars\SimpleVK\V4\Config\ClientConfig;
-use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
 use Throwable;
 
 use function Amp\async;

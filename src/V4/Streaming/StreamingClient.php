@@ -76,7 +76,7 @@ final class StreamingClient
         if ($socket === false) {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
-                "Streaming connect failed: [$errno] $errstr",
+                "Streaming connect failed: [{$errno}] {$errstr}",
             );
         }
         \stream_set_timeout($socket, 30);
@@ -127,9 +127,7 @@ final class StreamingClient
             $length = \unpack('J', $extended64)[1];
         }
 
-        $payload = $this->readBytes($length);
-
-        return $payload;
+        return $this->readBytes($length);
     }
 
     /**

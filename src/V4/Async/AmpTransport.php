@@ -28,9 +28,9 @@ final class AmpTransport implements Transport, AsyncTransport
 
     public function callAsync(string $method, array $params = []): Future
     {
-        $request = new Request($this->baseUrl . $method, 'POST', \http_build_query($params), [
-            'Content-Type' => 'application/x-www-form-urlencoded',
-        ]);
+        $request = new Request(\rtrim($this->baseUrl, '/') . '/' . $method, 'POST');
+        $request->setHeader('Content-Type', 'application/x-www-form-urlencoded');
+        $request->setBody(\http_build_query($params));
 
         return async(function () use ($method, $request): array {
             $response = $this->client->request($request);
@@ -41,14 +41,14 @@ final class AmpTransport implements Transport, AsyncTransport
             } catch (\JsonException $e) {
                 throw new SimpleVkException(
                     SimpleVkException::TRANSPORT_ERROR,
-                    "VK API вернул некорректный JSON для $method: {$e->getMessage()}",
+                    "VK API вернул некорректный JSON для {$method}: {$e->getMessage()}",
                 );
             }
 
             if (!\is_array($decoded)) {
                 throw new SimpleVkException(
                     SimpleVkException::TRANSPORT_ERROR,
-                    "VK API вернул не-JSON-объект для $method",
+                    "VK API вернул не-JSON-объект для {$method}",
                 );
             }
 

@@ -18,7 +18,6 @@ final class IncomingMessage
     private readonly array $clientInfo;
 
     /**
-     * @param array<string, mixed> $object Объект update: ['message' => [...], 'client_info' => [...]].
      */
     public function __construct(
         private readonly \DigitalStars\SimpleVK\V4\Event\Update $update,
@@ -57,14 +56,6 @@ final class IncomingMessage
     }
 
     /**
-     * Текст сообщения; для сообщения только со стикером — описание стикера.
-     */
-    public function text(): string
-    {
-        return (string) ($this->message['text'] ?? '');
-    }
-
-    /**
      * Payload кнопки, если сообщение отправлено нажатием bot-button.
      *
      * @return array<string, mixed>|null
@@ -84,6 +75,22 @@ final class IncomingMessage
         }
 
         return \is_array($decoded) ? $decoded : null;
+    }
+
+    /**
+     * Текст сообщения (геттер) или строитель ответа с этим текстом.
+     *
+     * Двойной режим как в v3:
+     *   $t = $msg->text();                 // получить текст
+     *   $msg->text('ответ')->send();       // отправить ответ в диалог
+     */
+    public function text(?string $newText = null): string|OutgoingMessage
+    {
+        if ($newText === null) {
+            return (string) ($this->message['text'] ?? '');
+        }
+
+        return (new OutgoingMessage($this->api))->to($this->peerId())->text($newText);
     }
 
     /**

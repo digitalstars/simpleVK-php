@@ -99,10 +99,13 @@ final class ApiClient
                     'vk_error' => $e->vkErrorCode,
                     'backoff_ms' => $backoffMs,
                 ]);
-                \usleep($backoffMs * 1000);
+                \usleep(\max(0, $backoffMs * 1000));
                 $backoffMs *= 2; // экспоненциальная задержка
             }
         }
+
+        // Недостижимо: цикл завершается только через throw или return.
+        throw new SimpleVkException(SimpleVkException::TRANSPORT_ERROR, "VK API: исчерпаны попытки вызова $method");
     }
 
     /**
@@ -180,7 +183,7 @@ final class ApiClient
         $wait = $this->lastRequestAt + $minInterval - $now;
 
         if ($wait > 0) {
-            \usleep((int) \ceil($wait * 1_000_000));
+            \usleep(\max(0, (int) \ceil($wait * 1_000_000)));
         }
 
         $this->lastRequestAt = \max($now, $this->lastRequestAt + $minInterval);

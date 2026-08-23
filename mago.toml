@@ -90,6 +90,7 @@ ignore = [
     "non-existent-class-constant",
     "no-value",
     "invalid-operand",
+    "non-existent-class-like",     # Классы расширения true_async (Async\Coroutine) не индексируются mago
 ]
 
 find-unused-definitions = false

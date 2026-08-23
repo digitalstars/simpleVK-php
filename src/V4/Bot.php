@@ -5,11 +5,8 @@ namespace DigitalStars\SimpleVK\V4;
 use DigitalStars\SimpleVK\V4\Config\ClientConfig;
 use DigitalStars\SimpleVK\V4\Event\Update;
 use DigitalStars\SimpleVK\V4\Event\UpdateType;
-use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
 use DigitalStars\SimpleVK\V4\LongPoll\LongPollClient;
 use DigitalStars\SimpleVK\V4\Message\IncomingMessage;
-use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 /**
  * Бот: регистрация обработчиков, middleware и диспетчеризация событий.
@@ -118,10 +115,10 @@ final class Bot
         $dto = $update instanceof Update ? $update : Update::fromLongPoll($update);
 
         // Свёртка middleware: последний зарегистрированный выполняется первым.
-        $pipeline = fn(Update $u) => $this->route($u);
+        $pipeline = $this->route(...);
         foreach (\array_reverse($this->middleware) as $middleware) {
             $next = $pipeline;
-            $pipeline = fn(Update $u) => $middleware($u, $next);
+            $pipeline = static fn(Update $u) => $middleware($u, $next);
         }
 
         $pipeline($dto);

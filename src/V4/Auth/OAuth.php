@@ -10,7 +10,7 @@ use SensitiveParameter;
  * Поток: 1) redirectUserToAuthUrl() → пользователь логинится;
  *        2) VK возвращает code на redirect_uri; 3) fetchToken(code).
  */
-final class OAuth
+class OAuth
 {
     private const AUTH_URL = 'https://oauth.vk.com/authorize';
     private const TOKEN_URL = 'https://oauth.vk.com/access_token';
@@ -43,6 +43,23 @@ final class OAuth
     }
 
     /**
+     * Точка HTTP-ввода для тестов (переопределяется в наследниках).
+     *
+     * @return string|false
+     */
+    protected function httpGet(string $url)
+    {
+        // file_get_contents сам возвращает false при сбое; warning подавляем set_error_handler
+        $level = \set_error_handler(static fn(int $no, string $msg): bool => true);
+
+        try {
+            return \file_get_contents($url);
+        } finally {
+            \restore_error_handler();
+        }
+    }
+
+    /**
      * Обмен кода на токен.
      *
      * @return array{access_token: string, expires_in?: int, user_id: int}
@@ -59,7 +76,7 @@ final class OAuth
                 'code' => $code,
             ]);
 
-        $raw = @\file_get_contents($url);
+        $raw = $this->httpGet($url);
 
         if ($raw === false) {
             throw new \RuntimeException('OAuth: не удалось выполнить запрос к oauth.vk.com');

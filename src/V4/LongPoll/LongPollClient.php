@@ -13,7 +13,7 @@ use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
  * Сам управляет сервером: groups.getLongPollServer, повторное обновление ключа
  * при code 2/3, ожидание при ts-таймаутах и mode-параметрах.
  */
-final class LongPollClient
+class LongPollClient
 {
     private const MODE_ATTACHMENTS = 2; // возвращать вложения
     private const MODE_EXTENDED_EVENTS = 8; // расширенный набор событий
@@ -54,12 +54,24 @@ final class LongPollClient
             return [];
         }
 
-        $this->server['ts'] = (int) ($response['ts'] ?? 0);
+        if ($this->server !== null) {
+            $this->server['ts'] = (int) ($response['ts'] ?? 0);
+        }
 
-        return \array_map(
-            static fn(array $raw): Update => Update::fromLongPoll($raw),
-            \is_array($response['updates'] ?? null) ? $response['updates'] : [],
-        );
+        /** @var list<array<string, mixed>> $rawUpdates */
+        $rawUpdates = \is_array($response['updates'] ?? null) ? $response['updates'] : [];
+
+        return \array_map(Update::fromLongPoll(...), $rawUpdates);
+    }
+
+    /**
+     * Точка HTTP-ввода для тестов (переопределяется в наследниках).
+     *
+     * @return string|false
+     */
+    protected function httpGet(string $url)
+    {
+        return \file_get_contents($url, context: \stream_context_create(['http' => ['timeout' => 35]]));
     }
 
     /**
@@ -83,7 +95,7 @@ final class LongPollClient
             self::VERSION,
         );
 
-        $raw = \file_get_contents($url, context: \stream_context_create(['http' => ['timeout' => 35]]));
+        $raw = $this->httpGet($url);
 
         if ($raw === false) {
             throw new SimpleVkException(SimpleVkException::TRANSPORT_ERROR, 'LongPoll: таймаут или сбой сети');
@@ -123,17 +135,5 @@ final class LongPollClient
             'server' => (string) $response['server'],
             'ts' => (int) $response['ts'],
         ];
-    }
-}
-
-/**
- * Внутреннее исключение перезапуска LongPoll-сессии.
- */
-final class LongPollReset extends \RuntimeException
-{
-    public function __construct(
-        public readonly ?int $ts = null,
-    ) {
-        parent::__construct('LongPoll session reset');
     }
 }
