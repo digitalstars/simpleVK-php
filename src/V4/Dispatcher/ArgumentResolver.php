@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace DigitalStars\SimpleVK\V4\Dispatcher;
 
+use DigitalStars\SimpleVK\V4\Dto\ChatDto;
+use DigitalStars\SimpleVK\V4\Dto\MessageDto;
+use DigitalStars\SimpleVK\V4\Dto\UserDto;
 use Psr\SimpleCache\CacheInterface;
 use ReflectionFunctionAbstract;
 
@@ -19,6 +22,26 @@ class ArgumentResolver
     public function __construct(
         private readonly ?CacheInterface $persistentCache = null,
     ) {}
+
+    /**
+     * Собирает типизированные DTO из контекста события.
+     *
+     * Возвращает null, если тип не DTO или данных в событии нет
+     * (тогда параметр обрабатывается следующими приоритетами).
+     */
+    private static function resolveDto(?string $typeName, Context $context): ?object
+    {
+        $raw = $context->incomingMessageRaw();
+
+        return match ($typeName) {
+            UserDto::class => $raw !== null && (int) ($raw['from_id'] ?? 0) > 0
+                ? UserDto::fromArray(['id' => (int) $raw['from_id']])
+                : null,
+            ChatDto::class => ChatDto::fromPeerId((int) ($raw['peer_id'] ?? $context->peerId ?? 0)),
+            MessageDto::class => $raw !== null ? MessageDto::fromArray($raw) : null,
+            default => null,
+        };
+    }
 
     /**
      * Получает метаданные о параметрах метода, используя кэш.
@@ -100,6 +123,13 @@ class ArgumentResolver
             // ПРИОРИТЕТ 1: Контекст выполнения (по типу; имя Context оставлено для совместимости)
             if ($paramTypeName === Context::class || $paramName === 'context' || $paramName === Context::class) {
                 $finalArgs[] = $context;
+                continue;
+            }
+
+            // ПРИОРИТЕТ 1.5: Типизированные DTO из события (UserDto/ChatDto/MessageDto)
+            $dto = self::resolveDto($paramTypeName, $context);
+            if ($dto !== null) {
+                $finalArgs[] = $dto;
                 continue;
             }
 

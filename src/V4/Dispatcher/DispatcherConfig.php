@@ -67,7 +67,7 @@ class DispatcherConfig
      */
     public function withContainer(ContainerInterface $container): self
     {
-        $this->factory = /** @param class-string $class */ static fn(string $class): object => $container->get($class);
+        $this->factory = static fn(string $class): object => self::containerGet($container, $class);
         return $this;
     }
 
@@ -75,6 +75,15 @@ class DispatcherConfig
      * @return callable|null
      * @api
      */
+    /**
+     * @return \Closure(class-string):object|null
+     */
+    /** @param ContainerInterface $container @param class-string $class */
+    private static function containerGet(ContainerInterface $container, string $class): object
+    {
+        return $container->get($class);
+    }
+
     /**
      * @return \Closure(class-string):object|null
      */

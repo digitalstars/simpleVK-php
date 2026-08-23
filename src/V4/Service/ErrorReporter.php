@@ -86,11 +86,13 @@ final class ErrorReporter
     public function middleware(): callable
     {
         return function (callable $handler): callable {
-            return function () use ($handler): void {
+            $self = $this;
+
+            return static function (mixed ...$args) use ($self, $handler): void {
                 try {
-                    $handler(...\func_get_args());
+                    $handler(...$args);
                 } catch (\Throwable $e) {
-                    $this->report($e);
+                    $self->report($e);
                 }
             };
         };

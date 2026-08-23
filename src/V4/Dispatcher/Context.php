@@ -107,6 +107,24 @@ class Context
     }
 
     /**
+     * Сырой массив входящего сообщения, если событие — message_new; иначе null.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function incomingMessageRaw(): ?array
+    {
+        if ($this->event instanceof IncomingMessage) {
+            return $this->event->raw();
+        }
+
+        if (\is_array($this->event) && \is_array($this->event['message'] ?? null)) {
+            return $this->event['message'];
+        }
+
+        return null;
+    }
+
+    /**
      * Быстрый доступ к конструктору исходящего сообщения текущего диалога.
      */
     public function msg(string $text = ''): OutgoingMessage
