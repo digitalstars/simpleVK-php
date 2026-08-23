@@ -6,6 +6,7 @@ use DigitalStars\SimpleVK\V4\Config\ClientConfig;
 use DigitalStars\SimpleVK\V4\Event\Update;
 use DigitalStars\SimpleVK\V4\Event\UpdateType;
 use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
+use DigitalStars\SimpleVK\V4\LongPoll\LongPollClient;
 use DigitalStars\SimpleVK\V4\Message\IncomingMessage;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -124,6 +125,20 @@ final class Bot
         }
 
         $pipeline($dto);
+    }
+
+    /**
+     * Блокирующий LongPoll-цикл (для скриптов и true-async корутин).
+     */
+    public function run(): void
+    {
+        $longpoll = new LongPollClient($this->config, $this->api);
+
+        while (true) {
+            foreach ($longpoll->wait() as $update) {
+                $this->dispatch($update);
+            }
+        }
     }
 
     /**
