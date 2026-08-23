@@ -1,6 +1,6 @@
 name: Сборка и публикация релиза
 
-# Триггер: запускать этот рабочий процесс только при создании нового релиза
+# Триггер: только при создании нового релиза
 on:
   release:
     types: [created]
@@ -16,60 +16,60 @@ jobs:
       - name: 2. Настройка PHP и Composer
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.4'
           extensions: mbstring, curl, json
           tools: composer:v2
 
-      # --- НОВАЯ, ИСПРАВЛЕННАЯ ЛОГИКА СБОРКИ ---
-
-      - name: 3. Создание финальной структуры проекта
+      - name: 3. Сборка структуры релиза
         run: |
-          # Создаем чистую папку для нашего релиза
           mkdir release_build
-          
-          # Копируем код самой библиотеки в её "пакет" внутри будущей папки vendor
-          # Это будет наш "локальный репозиторий"
+
+          # Код библиотеки становится "локальным пакетом" внутри будущего vendor
           mkdir -p release_build/vendor/digitalstars/simplevk
-          # Используем rsync для чистого копирования, исключая ненужные файлы
-          rsync -av --progress . release_build/vendor/digitalstars/simplevk/ --exclude ".git" --exclude ".github" --exclude "release_build"
-          
-          # Создаем временный composer.json в корне сборки, чтобы установить зависимости
-          # Он говорит Composer: "Установи digitalstars/simplevk, который лежит в локальной папке"
-          echo '{"name": "digitalstars/simplevk-release","description": "Release package for SimpleVK","repositories": [{"type": "path","url": "vendor/digitalstars/simplevk"}],"require": {"digitalstars/simplevk": "*"}}' > release_build/composer.json
+          rsync -a . release_build/vendor/digitalstars/simplevk/ \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "release_build" \
+            --exclude "tests" \
+            --exclude "docs" \
+            --exclude ".idea" \
+            --exclude ".phpunit.cache"
 
-      # --optimize-autoloader: создает оптимизированный автозагрузчик для лучшей производительности
-      - name: 4. Установка зависимостей в правильную структуру
+          # Включаем в пакет release-bootstrap: вызов PackagistReporter
+          # (анонимная статистика установок из архивов без Composer)
+          cat > release_build/vendor/digitalstars/simplevk/release_bootstrap.php <<'PHP'
+          <?php
+
+          declare(strict_types=1);
+
+          // Активация репортера ТОЛЬКО для CI-сборки релизного архива.
+          \DigitalStars\SimpleVK\V4\Service\PackagistReporter::checkAndReport('${{ github.event.release.tag_name }}');
+          PHP
+
+          # Регистрируем bootstrap как autoload.files внутреннего пакета
+          cd release_build/vendor/digitalstars/simplevk
+          composer config --json autoload.files '["release_bootstrap.php"]'
+
+          # Корневой composer.json сборки: ставим наш локальный пакет
+          cd ../../../../release_build
+          echo '{"name": "digitalstars/simplevk-release","description": "Release package for SimpleVK v4","repositories": [{"type": "path","url": "vendor/digitalstars/simplevk"}],"require": {"digitalstars/simplevk": "*"}}' > composer.json
+
+      - name: 4. Установка зависимостей
         run: |
-          # Переходим в папку сборки и запускаем composer install
-          # Теперь Composer сгенерирует autoload.php с ПРАВИЛЬНЫМИ путями
           cd release_build
-          composer install --no-dev --optimize-autoloader
-          
-          # Удаляем временные файлы, которые не нужны в финальном архиве
-          rm composer.json composer.lock
+          composer install --no-dev --optimize-autoloader --no-interaction
+          rm -f composer.json composer.lock
 
-      # Внедряем вызов PackagistReporter в файл Compatibility.php уже после всех установок
-      - name: 5. Внедрение кода для отправки статистики
-        run: |
-          REPORTER_PATH="release_build/vendor/digitalstars/simplevk/src/Compatibility.php"
-          REPORTER_CODE='// Активация репортера для CI-сборки. Вызывается только в релизных архивах.\n\\DigitalStars\\SimpleVK\\Utils\\PackagistReporter::checkAndReport();'
-          sed -i '4a\'"$REPORTER_CODE" "$REPORTER_PATH"
-
-      - name: 6. Подготовка к архивации
+      - name: 5. Подготовка имени архива
         id: prep
-        run: |
-          # Готовим имя для будущего архива
-          echo "ARCHIVE_NAME=SimpleVK-${{ github.event.release.tag_name }}.zip" >> $GITHUB_ENV
+        run: echo "ARCHIVE_NAME=SimpleVK-${{ github.event.release.tag_name }}.zip" >> $GITHUB_ENV
 
-      # Создаем ZIP-архив из содержимого подготовленной папки release_build
-      - name: 7. Создание ZIP-архива
+      - name: 6. Создание ZIP-архива
         run: |
-          # Переходим в директорию сборки, чтобы в архиве не было родительской папки release_build
           cd release_build
-          # Архивируем всё её содержимое
-          zip -r ../${{ env.ARCHIVE_NAME }} .
+          zip -rq ../${{ env.ARCHIVE_NAME }} .
 
-      - name: 8. Загрузка архива в релиз
+      - name: 7. Загрузка архива в релиз
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
