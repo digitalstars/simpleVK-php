@@ -26,8 +26,8 @@ final class AmpAdapter
 {
     private static ?HttpClient $httpClient = null;
 
-    private const LP_MODE = 2 | 8 | 64 | 128 | 256;
-    private const LP_VERSION = 3;
+    private const int LP_MODE = 2 | 8 | 64 | 128 | 256;
+    private const int LP_VERSION = 3;
 
     public static function transport(?HttpClient $client = null): AmpTransport
     {
@@ -105,7 +105,7 @@ final class AmpAdapter
 
     public static function httpClient(): HttpClient
     {
-        return self::$httpClient ??= (new HttpClientBuilder())->build();
+        return self::$httpClient ??= new HttpClientBuilder()->build();
     }
 
     public static function setHttpClient(HttpClient $client): void

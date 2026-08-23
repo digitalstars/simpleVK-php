@@ -21,7 +21,7 @@ use SensitiveParameter;
  */
 final class ClientConfig
 {
-    public const ENV_PREFIX_DEFAULT = 'SIMPLEVK';
+    public const string ENV_PREFIX_DEFAULT = 'SIMPLEVK';
 
     public function __construct(
         #[SensitiveParameter]
@@ -63,34 +63,40 @@ final class ClientConfig
      */
     public static function fromEnv(string $prefix = self::ENV_PREFIX_DEFAULT): self
     {
-        $token = \getenv("{$prefix}_TOKEN") ?: $_ENV["{$prefix}_TOKEN"] ?? $_SERVER["{$prefix}_TOKEN"] ?? '';
-        if ($token === '') {
+        $token = self::envString($prefix, 'TOKEN');
+
+        if ($token === null) {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
                 "ENV {$prefix}_TOKEN не задан. Укажите токен сообщества.",
             );
         }
 
-        $groupIdRaw = \getenv("{$prefix}_GROUP_ID")
-        ?: $_ENV["{$prefix}_GROUP_ID"] ?? $_SERVER["{$prefix}_GROUP_ID"] ?? '0';
-        $versionRaw = \getenv("{$prefix}_API_VERSION") ?: $_ENV["{$prefix}_API_VERSION"] ?? '5.199';
-        $secretRaw = \getenv("{$prefix}_CONFIRMATION_SECRET") ?: $_ENV["{$prefix}_CONFIRMATION_SECRET"] ?? '';
-
         return new self(
-            token: (string) $token,
-            groupId: (int) $groupIdRaw,
-            apiVersion: (string) $versionRaw,
-            confirmationSecret: $secretRaw !== '' ? (string) $secretRaw : null,
+            token: $token,
+            groupId: (int) (self::envString($prefix, 'GROUP_ID') ?? '0'),
+            apiVersion: self::envString($prefix, 'API_VERSION') ?? '5.199',
+            confirmationSecret: self::envString($prefix, 'CONFIRMATION_SECRET'),
             confirmationCode: self::envString($prefix, 'CONFIRM_CODE'),
         );
     }
 
+    /**
+     * Достаёт строковую переменную окружения из getenv/$_ENV/$_SERVER.
+     */
     private static function envString(string $prefix, string $suffix): ?string
     {
-        $value = \getenv("{$prefix}_{$suffix}")
-        ?: $_ENV["{$prefix}_{$suffix}"] ?? $_SERVER["{$prefix}_{$suffix}"] ?? '';
+        $raw = \getenv("{$prefix}_{$suffix}");
+        if ($raw === false) {
+            $envValue = $_ENV["{$prefix}_{$suffix}"] ?? $_SERVER["{$prefix}_{$suffix}"] ?? null;
+            $raw = \is_string($envValue) ? $envValue : null;
+        }
 
-        return $value !== '' ? (string) $value : null;
+        if (!\is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        return $raw;
     }
 
     public function withTransport(Transport $transport): self

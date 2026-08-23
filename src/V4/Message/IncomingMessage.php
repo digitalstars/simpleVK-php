@@ -98,7 +98,7 @@ final class IncomingMessage
             return (string) ($this->message['text'] ?? '');
         }
 
-        return (new OutgoingMessage($this->api))->to($this->peerId())->text($newText);
+        return new OutgoingMessage($this->api)->to($this->peerId())->text($newText);
     }
 
     /**
@@ -179,6 +179,6 @@ final class IncomingMessage
      */
     public function outgoing(): OutgoingMessage
     {
-        return (new OutgoingMessage($this->api))->to($this->peerId());
+        return new OutgoingMessage($this->api)->to($this->peerId());
     }
 }

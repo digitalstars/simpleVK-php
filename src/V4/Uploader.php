@@ -15,7 +15,7 @@ use SensitiveParameter;
  */
 final class Uploader
 {
-    private const MAX_FILE_SIZE = 200_000_000; // 200 MB (документы)
+    private const int MAX_FILE_SIZE = 200_000_000; // 200 MB (документы)
 
     public function __construct(
         private readonly ClientConfig $config,
@@ -114,7 +114,7 @@ final class Uploader
                 : json_encode($v), $uploadResult),
         ]);
 
-        $first = \is_array($savedList) ? $savedList[0] ?? null : null;
+        $first = \array_values($savedList)[0] ?? null;
         if (!\is_array($first)) {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
@@ -182,15 +182,11 @@ final class Uploader
             \CURLOPT_POSTFIELDS => [$fieldName => new \CURLFile($filePath)],
         ]);
 
-        try {
-            $body = \curl_exec($ch);
-            $errno = \curl_errno($ch);
+        $body = \curl_exec($ch);
+        $errno = \curl_errno($ch);
 
-            if ($body === false) {
-                throw new SimpleVkException(SimpleVkException::TRANSPORT_ERROR, "Uploader: сбой загрузки: [{$errno}]");
-            }
-        } finally {
-            \curl_close($ch);
+        if ($body === false) {
+            throw new SimpleVkException(SimpleVkException::TRANSPORT_ERROR, "Uploader: сбой загрузки: [{$errno}]");
         }
 
         try {

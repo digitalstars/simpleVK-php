@@ -1,14 +1,18 @@
 #:schema https://mago.carthage.software/1.47.3/schema.json
-# Конфигурация Mago для библиотеки SimpleVK.
-# Адаптирован из E:\PhpstormProjects\tower_bot\mago.toml (см. docs-заметки tower_bot).
+# Конфигурация Mago для библиотеки SimpleVK v4.
+# Выровнен с референсом E:\PhpstormProjects\tower_bot\mago.toml;
+# отличия от референса — осознанные и помечены комментариями.
 version = "1"
-# Минимальная версия PHP, поддерживаемая библиотекой (см. composer.json)
-php-version = "8.2.0"
+php-version = "8.4.0" # MIN PHP библиотеки (composer.json: >=8.4)
 
 [source]
-paths    = ["src"]
-includes = ["vendor"]
+paths    = [
+    "src/V4", # только v4; legacy src/*.php (v3) уходит при мерже
+]
+includes = ["vendor"] # индексация символов зависимостей (Psr\*, Amp\*) для анализатора
 excludes = [
+    "var/**",
+    "docs/**",
     "vendor/composer/**",
 ]
 
@@ -19,36 +23,47 @@ literal-separator = true
 preset = "default"
 
 [linter]
+integrations = []
 minimum-fail-level = "warning"
 
 [linter.rules]
-# Осознанно выключено: declare(strict_types=1) не используется в библиотеке,
-# т.к. строгий режим вместе с новыми нативными типами даст пользователям
-# новые TypeError на строковых данных из VK API (ломает обратную совместимость)
+# ОТЛИЧИЕ ОТ РЕФЕРЕНСА (там enabled = true): declare(strict_types=1) не используется
+# в библиотеке — строгий режим вместе с новыми нативными типами даст пользователям
+# новые TypeError на строковых данных из VK API (ломает обратную совместимость).
 strict-types = { enabled = false }
 no-eval = { enabled = true, level = "error" }
 no-global = { enabled = true, level = "error" }
 no-error-control-operator = { enabled = true, level = "warning" }
 no-multi-assignments = { enabled = true, level = "warning" }
 
-# Вкусовщина / не применимо к legacy-коду библиотеки
+# ==========================================
+# ВКУСОВЩИНА / НЕ ПРИМЕНИМО К КОДУ БИБЛИОТЕКИ
+# (список совпадает с референсом)
+# ==========================================
 no-boolean-flag-parameter = { enabled = false }
 prefer-early-continue = { enabled = false }
 no-else-clause = { enabled = false }
 prefer-early-return = { enabled = false }
-too-many-methods = { enabled = false }
-cyclomatic-complexity = { enabled = false }
+too-many-methods = { enabled = false }          # rich-классы Message/Keyboard
+cyclomatic-complexity = { enabled = false }      # длинная бизнес-логика в хендлерах
 excessive-parameter-list = { enabled = false }
 too-many-properties = { enabled = false }
 ambiguous-function-call = { enabled = false }
 literal-named-argument = { enabled = false }
 halstead = { effort-threshold = 12000, volume-threshold = 2000 }
-too-many-enum-cases = { enabled = false } # UpdateType — полный домен событий VK API
-kan-defect = { enabled = false } # Эвристика Kan даёт FP на builder-классах с цепочками методов
-no-shorthand-ternary = { enabled = false } # ?: — идиоматичный fallback для ENV/данных VK API
-no-isset = { enabled = false } # isset() на сырых массивах VK API — базовый паттерн библиотеки
+
+# Пустые catch: легитимны в cleanup-путях (release() из finally, best-effort
+# телеметрия). Механизм @mago-expect для этого правила не работает (проверено
+# в tower_bot) — отключаем сознательно, как и в референсе.
+no-empty-catch-clause = { enabled = false }
+
+kan-defect = { enabled = false }                 # FP на builder-классах с цепочками методов
+too-many-enum-cases = { enabled = false }        # UpdateType — полный домен событий VK API
+no-shorthand-ternary = { enabled = false }       # ?: — идиоматичный fallback для ENV/данных VK API
+no-isset = { enabled = false }                   # isset() на сырых массивах VK API — базовый паттерн
 
 [analyzer]
+
 ignore = [
     # --- Данные VK API приходят нетипизированными (домен библиотеки) ---
     "mixed-method-access",
@@ -56,8 +71,8 @@ ignore = [
     "mixed-argument",
     "mixed-assignment",
     "mixed-array-assignment",
-    "mixed-operand",
     "mixed-array-access",
+    "mixed-operand",
     "mixed-return-statement",
     "invalid-type-cast",
     "imprecise-type",
@@ -77,38 +92,57 @@ ignore = [
     "invalid-callable",
     "possibly-null-property-access",
 
-    # --- Обратная совместимость: $vk остаётся nullable (Message можно создать без vk) ---
+    # --- Обратная совместимость: $vk остаётся nullable ---
     "possible-method-access-on-null",
 
     # --- Ложные срабатывания анализатора ---
-    "non-existent-method",         # FFI C-методы и методы, приходящие из трейтов
-    "non-existent-property",       # свойства трейта Request ($auth/$token)
-    "non-existent-function",       # litespeed_finish_request (ext отсутствует локально)
+    "non-existent-method",            # FFI C-методы и методы из трейтов
+    "non-existent-property",          # свойства трейта Request ($auth/$token)
+    "non-existent-function",          # litespeed_finish_request (ext отсутствует локально)
     "reference-constraint-violation", # by-ref параметры &$cfg — часть публичного API
-    "undefined-variable",          # init*-API создаёт переменные через ссылки
-    "unevaluated-code",
+    "undefined-variable",             # init*-API создаёт переменные через ссылки
+    "unevaluated-code",               # код в бесконечных циклах LongPoll/воркеров
     "non-existent-class-constant",
+    "non-existent-class-like",        # классы расширения true_async (Async\Coroutine)
     "no-value",
     "invalid-operand",
-    "non-existent-class-like",     # Классы расширения true_async (Async\Coroutine) не индексируются mago
+    "too-few-arguments",              # беспараметрические системные функции true_async (signal())
 ]
 
+# ОТЛИЧИЕ ОТ РЕФЕРЕНСА (там все true): это библиотека, а не приложение.
+# find-unused-definitions пометил бы каждый публичный метод, не вызываемый
+# внутри самой библиотеки (публичный API ≠ мёртвый код). Включать после
+# выделения ядра в отдельный пакет.
 find-unused-definitions = false
 find-unused-expressions = false
 find-unused-parameters = false
 analyze-dead-code = false
 
+# ==========================================
+# РАБОТА С МАССИВАМИ (как в референсе)
+# ==========================================
 strict-list-index-checks = false
-strict-array-index-existence = false
-allow-array-truthy-operand = false
-no-boolean-literal-comparison = false
+strict-array-index-existence = false   # "Possibly undefined array key" на данных VK/PDO
+allow-array-truthy-operand = false     # разрешает if ($array), иначе !== [] везде
+no-boolean-literal-comparison = false  # разрешает if ($isLeader === true)
 
+# ==========================================
+# ИСКЛЮЧЕНИЯ И АТРИБУТЫ (как в референсе)
+# ==========================================
 unchecked-exceptions = ["Error", "LogicException"]
 unchecked-exception-classes = []
-check-throws = false
+check-throws = false                  # @throws везде — бюрократия
 check-missing-override = false
 
+# ==========================================
+# ТИПИЗАЦИЯ И ООП (как в референсе)
+# ==========================================
 check-missing-type-hints = true
 check-property-initialization = false
 memoize-properties = true
-register-super-globals = true
+register-super-globals = true         # $_ENV для ClientConfig::fromEnv()
+
+# [guard] из референса здесь не переносился: слои Domain/Feature/Worker —
+# структура приложения tower_bot. Для библиотеки периметральный guard
+# имеет смысл, когда появится разделение core/adapters (кандидат: запретить
+# ядру V4\ зависеть от V4\Async\*).

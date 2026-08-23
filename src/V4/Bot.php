@@ -21,14 +21,14 @@ final class Bot
     /** @var array<string, list<callable(Update): void>> */
     private array $handlers = [];
 
-    /** @var callable|null */
-    private $onMessageHandler = null;
+    /** @var \Closure(IncomingMessage):void|null */
+    private ?\Closure $onMessageHandler = null;
 
-    /** @var callable|null */
-    private $onCallbackHandler = null;
+    /** @var \Closure(array<string,mixed>):void|null */
+    private ?\Closure $onCallbackHandler = null;
 
-    /** @var callable|null */
-    private $fallback = null;
+    /** @var \Closure(Update):void|null */
+    private ?\Closure $fallback = null;
 
     /** @var list<callable(Update, callable): void> */
     private array $middleware = [];
@@ -52,7 +52,7 @@ final class Bot
      */
     public function onMessage(callable $handler): self
     {
-        $this->onMessageHandler = $handler;
+        $this->onMessageHandler = $handler(...);
 
         return $this;
     }
@@ -64,7 +64,7 @@ final class Bot
      */
     public function onCallback(callable $handler): self
     {
-        $this->onCallbackHandler = $handler;
+        $this->onCallbackHandler = $handler(...);
 
         return $this;
     }
@@ -90,7 +90,7 @@ final class Bot
      */
     public function onFallback(callable $handler): self
     {
-        $this->fallback = $handler;
+        $this->fallback = $handler(...);
 
         return $this;
     }

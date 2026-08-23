@@ -151,7 +151,8 @@ class EventDispatcher
 
             // Приоритет 3: regex-паттерны (в порядке регистрации)
             foreach ($this->routeMap['regex'] as $pattern => $className) {
-                if (\preg_match($pattern, $text, $matches)) {
+                $matches = [];
+                if (\preg_match($pattern, $text, $matches) === 1) {
                     return [
                         'actionClass' => $className,
                         'actionArgs' => \array_slice($matches, 1),

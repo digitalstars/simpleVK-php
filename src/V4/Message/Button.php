@@ -9,10 +9,10 @@ namespace DigitalStars\SimpleVK\V4\Message;
  */
 final class Button implements \JsonSerializable
 {
-    public const COLOR_PRIMARY = 'primary';
-    public const COLOR_SECONDARY = 'secondary';
-    public const COLOR_NEGATIVE = 'negative';
-    public const COLOR_POSITIVE = 'positive';
+    public const string COLOR_PRIMARY = 'primary';
+    public const string COLOR_SECONDARY = 'secondary';
+    public const string COLOR_NEGATIVE = 'negative';
+    public const string COLOR_POSITIVE = 'positive';
 
     /** @var array<string, mixed> */
     private array $action;

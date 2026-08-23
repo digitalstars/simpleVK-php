@@ -12,7 +12,7 @@ namespace DigitalStars\SimpleVK\V4\Service;
  */
 final class PackagistReporter
 {
-    private const VENDOR_PATH = __DIR__ . '/../../../../vendor';
+    private const string VENDOR_PATH = __DIR__ . '/../../../../vendor';
 
     /**
      * @param non-empty-string $libraryVersion Версия библиотеки (SIMPLEVK_VERSION).

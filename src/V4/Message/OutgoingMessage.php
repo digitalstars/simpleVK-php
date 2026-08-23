@@ -15,7 +15,7 @@ use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
 final class OutgoingMessage
 {
     /** Практический лимит длины сообщения VK API. */
-    public const MAX_LENGTH = 4000;
+    public const int MAX_LENGTH = 4000;
 
     private ?string $text = null;
     private int|string|null $peerId = null;
@@ -95,9 +95,14 @@ final class OutgoingMessage
      */
     public function forward(array $forward): self
     {
-        $this->forward = \array_is_list($forward) && ($forward === [] || \is_int($forward[0]))
-            ? ['message_ids' => \implode(',', $forward)]
-            : $forward;
+        // list<int> → message_ids; ассоциативный массив — сырой forward-объект VK
+        if (\array_is_list($forward)) {
+            $this->forward = ['message_ids' => \implode(',', $forward)];
+        } else {
+            $this->forward = $forward;
+        }
+
+        return $this;
 
         return $this;
     }

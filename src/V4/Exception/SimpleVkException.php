@@ -11,7 +11,7 @@ namespace DigitalStars\SimpleVK\V4\Exception;
 final class SimpleVkException extends \RuntimeException
 {
     /** Транспортный сбой (сеть, таймаут, некорректный JSON в ответе). */
-    public const TRANSPORT_ERROR = -1;
+    public const int TRANSPORT_ERROR = -1;
 
     /**
      * @param array<string, mixed> $raw Полный исходный ответ VK API (или [] для транспортных сбоев).

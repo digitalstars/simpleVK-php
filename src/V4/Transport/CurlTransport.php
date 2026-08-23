@@ -12,7 +12,7 @@ use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
  */
 final class CurlTransport implements Transport
 {
-    private const DEFAULT_TIMEOUT = 30.0;
+    private const float DEFAULT_TIMEOUT = 30.0;
 
     public function __construct(
         private readonly string $baseUrl = 'https://api.vk.com/method/',

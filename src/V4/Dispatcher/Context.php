@@ -80,7 +80,7 @@ class Context
             throw new RuntimeException("Класс {$viewClass} должен иметь метод render()");
         }
 
-        $reflectionMethod = (new ReflectionClass($viewClass))->getMethod('render');
+        $reflectionMethod = new ReflectionClass($viewClass)->getMethod('render');
         $resolvedArgs = $this->argumentResolver->getArguments($reflectionMethod, $this, $args);
 
         return $instance->render(...$resolvedArgs);

@@ -30,7 +30,8 @@ final class UserInfo
             'fields' => \implode(',', $fields),
         ]);
 
-        $first = $result[0] ?? null;
+        /** @var array<string, mixed>|null $first */
+        $first = \array_values($result)[0] ?? null;
 
         return \is_array($first) ? $first : [];
     }

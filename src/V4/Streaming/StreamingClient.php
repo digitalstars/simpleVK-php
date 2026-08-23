@@ -13,10 +13,9 @@ use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
  */
 final class StreamingClient
 {
-    private const STREAMING_URL = 'wss://streaming.vk.com';
+    private const string STREAMING_URL = 'wss://streaming.vk.com';
 
-    /** @var resource|null */
-    private $socket = null;
+    private mixed $socket = null; // resource после connect()
 
     public function __construct(
         private readonly ApiClient $api,
@@ -68,10 +67,12 @@ final class StreamingClient
     {
         $endpoint = $this->getEndpoint();
         // wss://host/path → ssl://host:443
-        $parts = \parse_url($endpoint);
+        $parts = \parse_url($endpoint) ?: [];
         $host = ($parts['host'] ?? 'streaming.vk.com') . ':443';
         $path = ($parts['path'] ?? '/') . '?' . ($parts['query'] ?? '');
 
+        $errno = 0;
+        $errstr = '';
         $socket = \stream_socket_client("ssl://{$host}", $errno, $errstr, 10);
         if ($socket === false) {
             throw new SimpleVkException(
@@ -83,7 +84,9 @@ final class StreamingClient
 
         \fwrite(
             $socket,
-            "GET {$path} HTTP/1.1\r\nHost: {$parts['host']}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: "
+            "GET {$path} HTTP/1.1\r\nHost: "
+            . ($parts['host'] ?? 'streaming.vk.com')
+            . "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: "
             . \base64_encode(\random_bytes(16))
             . "\r\nSec-WebSocket-Version: 13\r\n\r\n",
         );

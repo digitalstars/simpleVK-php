@@ -39,7 +39,7 @@ class DispatcherConfig
         }
 
         foreach ($this->actionsPaths as $path) {
-            if (!is_string($path) || !is_dir($path)) {
+            if (!is_dir($path)) {
                 throw new InvalidArgumentException(
                     "Ошибка конфигурации диспетчера: указанный путь '{$path}' не существует или не является директорией.",
                 );

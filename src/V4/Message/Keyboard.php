@@ -16,8 +16,8 @@ use DigitalStars\SimpleVK\V4\Dispatcher\BaseButton;
 final class Keyboard implements \JsonSerializable
 {
     /** Максимум кнопок в строке (ограничение VK API). */
-    private const MAX_PER_ROW = 10;
-    private const MAX_ROWS = 10;
+    private const int MAX_PER_ROW = 10;
+    private const int MAX_ROWS = 10;
 
     /** @var list<list<Button>> */
     private array $rows = [];
@@ -53,17 +53,13 @@ final class Keyboard implements \JsonSerializable
      * кнопок-классов (наследников BaseButton). label/color/payload/type берутся
      * из состояния объекта и атрибута #[AsButton].
      *
-     * @param array<list<BaseButton>> $rows
+     * @param array<list<mixed>> $rows Строки кнопок; элементы проверяются рантайм-гвардом.
      */
     public static function fromButtons(array $rows): self
     {
         $keyboard = new self();
 
         foreach ($rows as $row) {
-            if (!\is_array($row)) {
-                throw new \LogicException('Keyboard::fromButtons() ожидает массив строк кнопок');
-            }
-
             $buttons = [];
             foreach ($row as $button) {
                 if (!$button instanceof BaseButton) {
@@ -74,7 +70,7 @@ final class Keyboard implements \JsonSerializable
                 $action = $payload['action'] ?? self::defaultPayloadAction($button::class);
                 $payload += ['action' => $action];
 
-                $type = \strtolower((string) ($button->getType() ?? 'text'));
+                $type = \strtolower($button->getType() ?? 'text');
                 $label = $button->getLabel() ?? 'Кнопка';
 
                 $vkButton = match ($type) {
@@ -92,7 +88,7 @@ final class Keyboard implements \JsonSerializable
                     'negative' => Button::COLOR_NEGATIVE,
                     'positive' => Button::COLOR_POSITIVE,
                 ];
-                $color = $colorMap[\strtolower((string) ($button->getColor() ?? 'blue'))] ?? null;
+                $color = $colorMap[\strtolower($button->getColor() ?? 'blue')] ?? null;
                 if ($color !== null) {
                     $vkButton = $vkButton->color($color);
                 }

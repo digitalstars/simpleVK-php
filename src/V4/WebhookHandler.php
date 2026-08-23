@@ -48,7 +48,7 @@ final class WebhookHandler
         $type = (string) ($data['type'] ?? '');
 
         if ($type === 'confirmation') {
-            return (string) ($config->confirmationCode ?? 'ok');
+            return $config->confirmationCode ?? 'ok';
         }
 
         // Секрет проверяем только на событиях: VK не подписывает confirmation

@@ -7,7 +7,7 @@ namespace DigitalStars\SimpleVK\V4\Message;
  */
 final class Carousel implements \JsonSerializable
 {
-    private const MAX_ELEMENTS = 10;
+    private const int MAX_ELEMENTS = 10;
 
     /** @var list<array<string, mixed>> */
     private array $elements = [];

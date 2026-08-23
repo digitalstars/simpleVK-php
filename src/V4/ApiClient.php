@@ -18,7 +18,7 @@ use Psr\Log\LoggerInterface;
 final class ApiClient
 {
     /** Коды VK API, при которых запрос стоит повторить. */
-    private const RETRYABLE_ERRORS = [1, 6, 9, 10];
+    private const array RETRYABLE_ERRORS = [1, 6, 9, 10];
 
     private Transport $transport;
     private LoggerInterface $logger;

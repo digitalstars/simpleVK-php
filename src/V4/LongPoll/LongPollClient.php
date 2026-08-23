@@ -15,12 +15,12 @@ use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
  */
 class LongPollClient
 {
-    private const MODE_ATTACHMENTS = 2; // возвращать вложения
-    private const MODE_EXTENDED_EVENTS = 8; // расширенный набор событий
-    private const MODE_EXTRA_DATA = 64; // payload в сообщениях
-    private const MODE_MESSAGE_PAYLOAD = 128; // payload кнопок
-    private const MODE_EVENT_ID = 256; // event_id в событиях
-    private const VERSION = 3;
+    private const int MODE_ATTACHMENTS = 2; // возвращать вложения
+    private const int MODE_EXTENDED_EVENTS = 8; // расширенный набор событий
+    private const int MODE_EXTRA_DATA = 64; // payload в сообщениях
+    private const int MODE_MESSAGE_PAYLOAD = 128; // payload кнопок
+    private const int MODE_EVENT_ID = 256; // event_id в событиях
+    private const int VERSION = 3;
 
     /** @var array{key: string, server: string, ts: int}|null */
     private ?array $server = null;
@@ -69,7 +69,7 @@ class LongPollClient
      *
      * @return string|false
      */
-    protected function httpGet(string $url)
+    protected function httpGet(string $url): string|false
     {
         return \file_get_contents($url, context: \stream_context_create(['http' => ['timeout' => 35]]));
     }
@@ -82,6 +82,9 @@ class LongPollClient
     private function poll(): array
     {
         $server = $this->server;
+        if ($server === null) {
+            return [];
+        }
         $url = \sprintf(
             '%s?act=a_check&key=%s&ts=%d&wait=25&mode=%d&version=%d',
             $server['server'],

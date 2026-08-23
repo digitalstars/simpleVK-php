@@ -12,8 +12,8 @@ use SensitiveParameter;
  */
 class OAuth
 {
-    private const AUTH_URL = 'https://oauth.vk.com/authorize';
-    private const TOKEN_URL = 'https://oauth.vk.com/access_token';
+    private const string AUTH_URL = 'https://oauth.vk.com/authorize';
+    private const string TOKEN_URL = 'https://oauth.vk.com/access_token';
 
     public function __construct(
         private readonly int $appId,
@@ -47,7 +47,7 @@ class OAuth
      *
      * @return string|false
      */
-    protected function httpGet(string $url)
+    protected function httpGet(string $url): string|false
     {
         // file_get_contents сам возвращает false при сбое; warning подавляем set_error_handler
         $level = \set_error_handler(static fn(int $no, string $msg): bool => true);
