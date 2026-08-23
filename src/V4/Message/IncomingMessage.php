@@ -19,8 +19,6 @@ final class IncomingMessage
     /** @var array<string, mixed> client_info из update. */
     private readonly array $clientInfo;
 
-    /**
-     */
     public function __construct(
         private readonly \DigitalStars\SimpleVK\V4\Event\Update $update,
         private readonly ApiClient $api,

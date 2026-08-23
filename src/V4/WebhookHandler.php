@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace DigitalStars\SimpleVK\V4;
 
-use DigitalStars\SimpleVK\V4\Config\ClientConfig;
-use DigitalStars\SimpleVK\V4\Event\Update;
 use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
-use DigitalStars\SimpleVK\V4\Message\IncomingMessage;
 use SensitiveParameter;
 
 /**

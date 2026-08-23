@@ -155,7 +155,7 @@ final class ApiClient
         }
 
         // Недостижимо: цикл завершается только через throw или return.
-        throw new SimpleVkException(SimpleVkException::TRANSPORT_ERROR, "VK API: исчерпаны попытки вызова $method");
+        throw new SimpleVkException(SimpleVkException::TRANSPORT_ERROR, "VK API: исчерпаны попытки вызова {$method}");
     }
 
     /**

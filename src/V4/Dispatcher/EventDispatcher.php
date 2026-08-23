@@ -219,12 +219,13 @@ class EventDispatcher
 
             $pipeline = \array_reduce(
                 \array_reverse($middlewareStack),
-                function (callable $next, string $middlewareClass) use ($context): callable {
-                    return function (Context $ctx) use ($next, $middlewareClass): void {
-                        /** @var MiddlewareInterface $middlewareInstance */
-                        $middlewareInstance = $this->createInstance($middlewareClass, $ctx);
-                        $middlewareInstance->process($ctx, $next);
-                    };
+                fn(callable $next, string $middlewareClass): callable => static function (Context $ctx) use (
+                    $next,
+                    $middlewareClass,
+                ): void {
+                    /** @var MiddlewareInterface $middlewareInstance */
+                    $middlewareInstance = $this->createInstance($middlewareClass, $ctx);
+                    $middlewareInstance->process($ctx, $next);
                 },
                 $finalHandler,
             );
@@ -248,7 +249,7 @@ class EventDispatcher
             // Фабрики нет или она не знает класс — создаём вручную ниже.
         }
 
-        \assert(\class_exists($className));
+        \assert(\class_exists($className), "Класс {$className} должен существовать");
 
         if (!\class_exists($className)) {
             throw new RuntimeException("Диспетчер: класс '{$className}' не существует");
@@ -266,9 +267,7 @@ class EventDispatcher
             $constructorArgs = $this->argumentResolver->getArguments($constructor, $context);
 
             /** @var object */
-            $instance = $reflection->newInstanceArgs($constructorArgs);
-
-            return $instance;
+            return $reflection->newInstanceArgs($constructorArgs);
         } catch (Throwable $e) {
             throw new RuntimeException(
                 "Диспетчер: не удалось создать '{$className}'. Проверьте конструктор и DI. Ошибка: {$e->getMessage()}",
@@ -295,7 +294,7 @@ class EventDispatcher
         ));
 
         foreach ($iterator as $fileInfo) {
-            \assert($fileInfo instanceof \SplFileInfo);
+            \assert($fileInfo instanceof \SplFileInfo, 'Итератор возвращает SplFileInfo');
 
             if (!$fileInfo->isFile() || $fileInfo->getExtension() !== 'php') {
                 continue;

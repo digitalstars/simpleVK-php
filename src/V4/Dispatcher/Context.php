@@ -6,7 +6,6 @@ namespace DigitalStars\SimpleVK\V4\Dispatcher;
 
 use DigitalStars\SimpleVK\V4\ApiClient;
 use DigitalStars\SimpleVK\V4\Message\OutgoingMessage;
-use Psr\SimpleCache\CacheInterface;
 use ReflectionClass;
 use RuntimeException;
 
@@ -66,9 +65,7 @@ class Context
         }
 
         /** @var object $instance */
-        $instance = ($this->factory)($className);
-
-        return $instance;
+        return ($this->factory)($className);
     }
 
     /**

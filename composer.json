@@ -63,11 +63,8 @@
     },
     "autoload": {
         "psr-4": {
-            "DigitalStars\\SimpleVK\\": "src/"
-        },
-        "files": [
-            "src/Compatibility.php"
-        ]
+            "DigitalStars\\SimpleVK\\V4\\": "src/V4/"
+        }
     },
     "scripts": {
         "test": "php vendor/bin/phpunit",
