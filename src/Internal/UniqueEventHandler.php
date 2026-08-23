@@ -1,10 +1,7 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DigitalStars\SimpleVK\Internal;
 
-use Exception;
 use LogicException;
 use Psr\SimpleCache\CacheInterface;
 use Psr\SimpleCache\InvalidArgumentException;
@@ -13,26 +10,29 @@ use RuntimeException;
 use Symfony\Component\Cache\Adapter\RedisAdapter;
 use Symfony\Component\Cache\Psr16Cache;
 
-class UniqueEventHandler
-{
+/**
+ * Дедупликация событий VK через PSR-16 кэш (по умолчанию — Redis).
+ *
+ * @internal Внешний вход — Setting::enableUniqueEventHandler().
+ */
+class UniqueEventHandler {
     private static ?CacheInterface $cache = null;
-    private static int $cache_ttl; // 3 дня
+    private static int $cache_ttl = 259200; // 3 дня
     private static bool $is_enabled = false;
 
     /**
-     * Включение обработки уникальных событий
+     * Включение обработки уникальных событий.
      *
      * @param CacheInterface|null $cache PSR-16 кэш
      * @param string $redis_host Хост Redis (используется, если $cache не указан)
      * @param int $redis_port Порт Redis (используется, если $cache не указан)
      * @param int $cache_ttl Время жизни записи в кэше
-     * @return void
      */
     public static function enable(
         ?CacheInterface $cache = null,
         string $redis_host = 'localhost',
         int $redis_port = 6379,
-        int $cache_ttl = 259_200,
+        int $cache_ttl = 259200
     ): void {
         self::$cache_ttl = $cache_ttl;
 
@@ -80,23 +80,19 @@ class UniqueEventHandler
     private static function createDefaultRedisCache(string $host, int $port): CacheInterface
     {
         if (!class_exists(Redis::class) || !extension_loaded('redis')) {
-            throw new LogicException('Для работы кэша по умолчанию необходимо расширение ext-redis.');
+            throw new LogicException("Для работы кэша по умолчанию необходимо расширение ext-redis.");
         }
 
         try {
             $redisClient = new Redis();
             $redisClient->connect($host, $port);
-            // PSR-6 адаптер, svk:unique_event: - префикс
+            // PSR-6 адаптер, svk.unique_event. - префикс
             $psr6Cache = new RedisAdapter($redisClient, 'svk.unique_event.');
 
             // Оборачиваем его в PSR-16 совместимый кеш
             return new Psr16Cache($psr6Cache);
-        } catch (Exception $e) {
-            throw new RuntimeException(
-                "Не удалось подключиться к Redis на {$host}:{$port}\n" . $e->getMessage(),
-                0,
-                $e,
-            );
+        } catch (\Exception $e) {
+            throw new RuntimeException("Не удалось подключиться к Redis на {$host}:{$port}\n" . $e->getMessage(), 0, $e);
         }
     }
 }

@@ -1,11 +1,12 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DigitalStars\SimpleVK\Attributes;
 
 use Attribute;
 
+/**
+ * Триггеры запуска Action: текстовая команда и/или регулярное выражение.
+ */
 #[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 class Trigger
 {
@@ -15,6 +16,7 @@ class Trigger
      */
     public function __construct(
         public ?string $command = null,
-        public ?string $pattern = null,
-    ) {}
+        public ?string $pattern = null
+    ) {
+    }
 }
