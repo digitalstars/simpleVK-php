@@ -27,10 +27,8 @@ integrations = []
 minimum-fail-level = "warning"
 
 [linter.rules]
-# ОТЛИЧИЕ ОТ РЕФЕРЕНСА (там enabled = true): declare(strict_types=1) не используется
-# в библиотеке — строгий режим вместе с новыми нативными типами даст пользователям
-# новые TypeError на строковых данных из VK API (ломает обратную совместимость).
-strict-types = { enabled = false }
+# Как в референсе: v4 полностью типизирована, строгий режим включён во всех файлах.
+strict-types = { enabled = true, level = "error" }
 no-eval = { enabled = true, level = "error" }
 no-global = { enabled = true, level = "error" }
 no-error-control-operator = { enabled = true, level = "warning" }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace DigitalStars\SimpleVK\V4;
 
 use DigitalStars\SimpleVK\V4\Config\ClientConfig;
