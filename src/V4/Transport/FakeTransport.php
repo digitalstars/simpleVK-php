@@ -16,7 +16,6 @@ final class FakeTransport implements Transport
     /** @var list<array{method: string, params: array<string, mixed>}> */
     public array $calls = [];
 
-
     /**
      * @param array<string, mixed> $responses Метод => значение 'response'.
      */
@@ -26,6 +25,7 @@ final class FakeTransport implements Transport
             $this->setResponse($method, $response);
         }
     }
+
     /**
      * Задаёт одиночный ответ метода (значение 'response' конверта).
      *
@@ -57,7 +57,7 @@ final class FakeTransport implements Transport
         if (!isset($this->responses[$method]) || $this->responses[$method] === []) {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
-                "FakeTransport: нет заготовленного ответа для метода $method",
+                "FakeTransport: нет заготовленного ответа для метода {$method}",
             );
         }
 

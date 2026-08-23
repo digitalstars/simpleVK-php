@@ -17,13 +17,14 @@ final class CurlTransport implements Transport
     public function __construct(
         private readonly string $baseUrl = 'https://api.vk.com/method/',
         private readonly float $timeout = self::DEFAULT_TIMEOUT,
-    ) {
-    }
+    ) {}
 
     public function call(string $method, array $params = []): array
     {
         if (!\extension_loaded('curl')) {
-            throw new \RuntimeException('Транспорт CurlTransport требует расширение ext-curl. Установите PSR-18 транспорт через ClientConfig::withTransport().');
+            throw new \RuntimeException(
+                'Транспорт CurlTransport требует расширение ext-curl. Установите PSR-18 транспорт через ClientConfig::withTransport().',
+            );
         }
 
         $ch = \curl_init();
@@ -46,7 +47,7 @@ final class CurlTransport implements Transport
             if ($body === false) {
                 throw new SimpleVkException(
                     SimpleVkException::TRANSPORT_ERROR,
-                    "Сбой сети при вызове VK API ($method): [$errno] $error",
+                    "Сбой сети при вызове VK API ({$method}): [{$errno}] {$error}",
                 );
             }
 
@@ -66,14 +67,14 @@ final class CurlTransport implements Transport
         } catch (\JsonException $e) {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
-                "VK API вернул некорректный JSON для $method: {$e->getMessage()}",
+                "VK API вернул некорректный JSON для {$method}: {$e->getMessage()}",
             );
         }
 
         if (!\is_array($decoded)) {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
-                "VK API вернул не-JSON-объект для $method",
+                "VK API вернул не-JSON-объект для {$method}",
             );
         }
 

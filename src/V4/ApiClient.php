@@ -8,7 +8,6 @@ use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
 use DigitalStars\SimpleVK\V4\Transport\AsyncTransport;
 use DigitalStars\SimpleVK\V4\Transport\Transport;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 
 /**
  * Исполнитель вызовов VK API: авторизация, версии, ретраи, rate limit, логирование.

@@ -5,6 +5,7 @@ namespace DigitalStars\SimpleVK\V4\Config;
 use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
 use DigitalStars\SimpleVK\V4\Transport\CurlTransport;
 use DigitalStars\SimpleVK\V4\Transport\Transport;
+use SensitiveParameter;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Psr\SimpleCache\CacheInterface;
@@ -23,11 +24,13 @@ final class ClientConfig
     public const ENV_PREFIX_DEFAULT = 'SIMPLEVK';
 
     public function __construct(
+        #[SensitiveParameter]
         public readonly string $token,
         public readonly int $groupId,
         public readonly string $apiVersion = '5.199',
         public readonly string $apiUrl = 'https://api.vk.com/method/',
         /** Секрет для подтверждения серверов Callback API. */
+        #[SensitiveParameter]
         public readonly ?string $confirmationSecret = null,
         public readonly int $retryMaxAttempts = 3,
         public readonly int $retryBackoffMs = 500,
@@ -46,6 +49,7 @@ final class ClientConfig
      * @param non-empty-string $token
      */
     public static function create(
+        #[SensitiveParameter]
         string $token,
         int $groupId,
         string $apiVersion = '5.199',
@@ -115,7 +119,7 @@ final class ClientConfig
         return $this->with(rateLimitPerSecond: $requestsPerSecond);
     }
 
-    public function withConfirmationSecret(string $secret): self
+    public function withConfirmationSecret(#[SensitiveParameter] string $secret): self
     {
         return $this->with(confirmationSecret: $secret);
     }
@@ -133,6 +137,7 @@ final class ClientConfig
         ?int $retryMaxAttempts = null,
         ?int $retryBackoffMs = null,
         ?float $rateLimitPerSecond = null,
+        #[SensitiveParameter]
         ?string $confirmationSecret = null,
     ): self {
         return new self(
