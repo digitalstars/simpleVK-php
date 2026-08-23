@@ -14,12 +14,26 @@ abstract class BaseButton extends BaseAction
     /** @var array<string, mixed> */
     protected array $payload = [];
 
-    public function getLabel(): ?string { return $this->label; }
-    public function getColor(): ?string { return $this->color; }
-    public function getType(): ?string { return $this->type; }
+    public function getLabel(): ?string
+    {
+        return $this->label;
+    }
+
+    public function getColor(): ?string
+    {
+        return $this->color;
+    }
+
+    public function getType(): ?string
+    {
+        return $this->type;
+    }
 
     /** @return array<string, mixed> */
-    public function getPayload(): array { return $this->payload; }
+    public function getPayload(): array
+    {
+        return $this->payload;
+    }
 
     public function label(string $label): self
     {

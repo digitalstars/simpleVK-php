@@ -8,7 +8,8 @@ use Psr\SimpleCache\CacheInterface;
 /**
  * Глобальные настройки библиотеки.
  */
-class Setting {
+class Setting
+{
     /**
      * Включает игнорирование дублирующихся событий от VK. По умолчанию для этого нужен Redis.
      *
@@ -21,7 +22,7 @@ class Setting {
         ?CacheInterface $cache = null,
         string $redis_host = 'localhost',
         int $redis_port = 6379,
-        int $cache_ttl = 259200
+        int $cache_ttl = 259200,
     ): void {
         UniqueEventHandler::enable($cache, $redis_host, $redis_port, $cache_ttl);
     }

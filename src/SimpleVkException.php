@@ -1,6 +1,5 @@
 <?php
 
-
 namespace DigitalStars\SimpleVK;
 
 use Exception;
@@ -75,7 +74,7 @@ class SimpleVkException extends Exception
             }
         }
 
-        return getcwd(); // крайний вариант - директория, в которой выполняют команду
+        return getcwd() ?: '.'; // крайний вариант - директория, в которой выполняют команду
     }
 
     private static function formatCustomError(string $message): string

@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types=1);
+namespace DigitalStars\SimpleVK\EventDispatcher;
 
 /**
  * Middleware-звено пайплайна обработки события.

@@ -5,6 +5,4 @@ namespace DigitalStars\SimpleVK\EventDispatcher;
 /**
  * Action, запускаемый текстовой командой (#[Trigger(command: ...)]) или #[Fallback].
  */
-abstract class BaseCommand extends BaseAction
-{
-}
+abstract class BaseCommand extends BaseAction {}

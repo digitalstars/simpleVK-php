@@ -5,9 +5,11 @@ namespace DigitalStars\SimpleVK;
 /**
  * Конструктор и отправитель записей на стене (wall.post).
  */
-class Post extends BaseConstructor {
+class Post extends BaseConstructor
+{
     /** @param array|null $cfg */
-    public static function create($vk = null, &$cfg = null): static {
+    public static function create($vk = null, &$cfg = null): static
+    {
         return new self($vk, $cfg);
     }
 
@@ -17,7 +19,8 @@ class Post extends BaseConstructor {
      * @param Post|array $cfg
      * @return static
      */
-    public function load($cfg = []): static {
+    public function load($cfg = []): static
+    {
         if ($cfg instanceof Post) {
             $this->vk = $cfg->vk;
             $this->config = $cfg->config;
@@ -33,7 +36,8 @@ class Post extends BaseConstructor {
      * @param int|null $publish_date Timestamp отложенной публикации (только в будущем).
      * @return mixed Результат wall.post.
      */
-    public function send($id = null, ?int $publish_date = null, $vk = null) {
+    public function send($id = null, ?int $publish_date = null, $vk = null)
+    {
         $params = [];
         if (!is_null($publish_date)) {
             if ($publish_date >= time())
@@ -48,7 +52,7 @@ class Post extends BaseConstructor {
         if (empty($this->vk) and isset($vk))
             $this->vk = $vk;
         if (empty($this->vk))
-            throw new SimpleVkException(0, "Экземпляр SimpleVK не передан");
+            throw new SimpleVkException(0, 'Экземпляр SimpleVK не передан');
         if (empty($id)) {
             $id = $this->vk->userInfo()['id'];
         }
@@ -72,7 +76,7 @@ class Post extends BaseConstructor {
             $attachments = array_merge($attachments, $this->config['params']['attachment']);
             unset($this->config['params']['attachment']);
         }
-        $attachments = !empty($attachments) ? ['attachment' => join(",", $attachments)] : [];
+        $attachments = !empty($attachments) ? ['attachment' => join(',', $attachments)] : [];
 
         if (isset($this->config['params']))
             $params += $this->config['params'];

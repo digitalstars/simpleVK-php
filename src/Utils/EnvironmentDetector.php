@@ -22,9 +22,7 @@ final class EnvironmentDetector
     private static ?string $detectedEnvironment = null;
 
     /** Только статическое использование. */
-    private function __construct()
-    {
-    }
+    private function __construct() {}
 
     /**
      * Определяет и возвращает текущую среду выполнения.

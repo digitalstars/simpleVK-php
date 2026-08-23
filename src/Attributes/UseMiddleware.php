@@ -15,7 +15,7 @@ class UseMiddleware
     /**
      * @param class-string $middleware
      */
-    public function __construct(public string $middleware)
-    {
-    }
+    public function __construct(
+        public string $middleware,
+    ) {}
 }

@@ -1,6 +1,5 @@
 <?php
 
-
 namespace DigitalStars\SimpleVK;
 
 require_once 'config_simplevk.php';
@@ -151,10 +150,9 @@ trait Request
             $result['error']['request_params'] = $params;
             if (is_array($result['error'])) {
                 $error_print = print_r($result['error'], true);
-            } else if (is_array($result)) {
-                $error_print = print_r($result, true);
             } else {
-                $error_print = (string) $result;
+                // $result всегда массив сюда: ветка !isset($result) создаёт ['error'=>...] выше
+                $error_print = print_r((array) $result, true);
             }
 
             throw new SimpleVkException((int) $error_code, "VK API Error!\n{$error_print}");

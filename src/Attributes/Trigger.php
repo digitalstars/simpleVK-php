@@ -16,7 +16,6 @@ class Trigger
      */
     public function __construct(
         public ?string $command = null,
-        public ?string $pattern = null
-    ) {
-    }
+        public ?string $pattern = null,
+    ) {}
 }

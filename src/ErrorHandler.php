@@ -1,6 +1,5 @@
 <?php
 
-
 namespace DigitalStars\SimpleVK;
 
 require_once 'config_simplevk.php';
@@ -169,6 +168,7 @@ trait ErrorHandler
                 '<pre>' . htmlspecialchars($clearMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</pre>',
             EnvironmentDetector::ENV_CLI_INTERACTIVE => print $coloredMessage,
             EnvironmentDetector::ENV_CLI_NON_INTERACTIVE => print $clearMessage,
+            default => print $clearMessage,
         };
     }
 
@@ -200,7 +200,7 @@ trait ErrorHandler
     }
 
     /**
-     * @return array<string, array{0:string, 1:string}>
+     * @return array<int|string, array{0:string, 1:string}>
      */
     private function defaultErrorLevelMap(): array
     {

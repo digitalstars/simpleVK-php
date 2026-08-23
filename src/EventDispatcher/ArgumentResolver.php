@@ -3,7 +3,6 @@
 namespace DigitalStars\SimpleVK\EventDispatcher;
 
 use Psr\SimpleCache\CacheInterface;
-
 use ReflectionFunctionAbstract;
 
 /**
@@ -15,9 +14,9 @@ class ArgumentResolver
     /** @var array<string, array> */
     private array $metadataCache = [];
 
-    public function __construct(private readonly ?CacheInterface $persistentCache = null)
-    {
-    }
+    public function __construct(
+        private readonly ?CacheInterface $persistentCache = null,
+    ) {}
 
     /**
      * Получает метаданные о параметрах метода, используя кэш.
@@ -26,8 +25,9 @@ class ArgumentResolver
      */
     private function getMethodParameters(ReflectionFunctionAbstract $method): array
     {
-        // 1. Создаем уникальный ключ для кэша.
-        $className = $method->getDeclaringClass()?->getName() ?? '';
+        // У ReflectionFunction нет getDeclaringClass()
+        $declaringClass = $method instanceof \ReflectionMethod ? $method->getDeclaringClass() : null;
+        $className = $declaringClass?->getName() ?? '';
         $cacheKey = $className . '::' . $method->getName();
 
         // 2. Проверяем кэш.
@@ -47,9 +47,12 @@ class ArgumentResolver
         $paramsData = [];
         foreach ($method->getParameters() as $param) {
             $type = $param->getType();
+            // DI-инъекция возможна только по именованному класс-типу:
+            // у ReflectionUnionType/IntersectionType нет isBuiltin()/getName()
+            $type_name = $type instanceof \ReflectionNamedType && !$type->isBuiltin() ? $type->getName() : null;
             $paramsData[] = [
                 'name' => $param->getName(),
-                'type_name' => $type && !$type->isBuiltin() ? $type->getName() : null,
+                'type_name' => $type_name,
                 'allows_null' => $param->allowsNull(),
                 'is_default_available' => $param->isDefaultValueAvailable(),
                 'default_value' => $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null,
@@ -79,8 +82,11 @@ class ArgumentResolver
      * @return array Готовый массив аргументов для вызова.
      * @throws \RuntimeException Если значение для параметра определить не удалось.
      */
-    public function getArguments(\ReflectionFunctionAbstract $reflectionMethod, Context $context, array $availableArgs = []): array
-    {
+    public function getArguments(
+        \ReflectionFunctionAbstract $reflectionMethod,
+        Context $context,
+        array $availableArgs = [],
+    ): array {
         $finalArgs = [];
 
         $methodParams = $this->getMethodParameters($reflectionMethod);
@@ -131,8 +137,13 @@ class ArgumentResolver
                 continue;
             }
 
-            $controllerName = $reflectionMethod->getDeclaringClass()?->getName() . '::' . $reflectionMethod->getName() . '()';
-            throw new \RuntimeException("Не удалось определить значение для параметра '{$paramName}' в методе '{$controllerName}'.");
+            $declaring = $reflectionMethod instanceof \ReflectionMethod
+                ? $reflectionMethod->getDeclaringClass()?->getName() . '::'
+                : '';
+            $controllerName = $declaring . $reflectionMethod->getName() . '()';
+            throw new \RuntimeException(
+                "Не удалось определить значение для параметра '{$paramName}' в методе '{$controllerName}'.",
+            );
         }
 
         return $finalArgs;

@@ -69,7 +69,7 @@ final class PackagistReporter
         }
 
         try {
-            $composerData = json_decode((string)file_get_contents($installedJsonPath), true, 512, JSON_THROW_ON_ERROR);
+            $composerData = json_decode((string) file_get_contents($installedJsonPath), true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
             return [];
         }
@@ -110,14 +110,13 @@ final class PackagistReporter
             '2.8.6', // Актуальная версия Composer
             function_exists('php_uname') ? php_uname('s') : 'Unknown',
             function_exists('php_uname') ? php_uname('r') : 'Unknown',
-            $phpVersion
+            $phpVersion,
         );
 
         $opts = [
             'http' => [
                 'method' => 'POST',
-                'header' => "Content-Type: application/json\r\n" .
-                    "User-Agent: {$userAgent}\r\n",
+                'header' => "Content-Type: application/json\r\n" . "User-Agent: {$userAgent}\r\n",
                 'content' => json_encode($postData),
                 'timeout' => 5,
                 'ignore_errors' => true,

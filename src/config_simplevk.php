@@ -24,33 +24,33 @@ const COUNT_TRY_SEND_FILE = 5;
 const PROXY = [];
 
 // Запрашиваемые права доступа для токена пользователя по умолчанию
-const DEFAULT_SCOPE = "notify,friends,photos,audio,video,stories,pages,status,notes,messages,wall,ads,offline,docs,groups,notifications,stats,email,market,phone,exchange,leads,adsweb,wallmenu,menu";
+const DEFAULT_SCOPE = 'notify,friends,photos,audio,video,stories,pages,status,notes,messages,wall,ads,offline,docs,groups,notifications,stats,email,market,phone,exchange,leads,adsweb,wallmenu,menu';
 
 // User-Agent по умолчанию
 const DEFAULT_USERAGENT = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36';
 
 // Приложения ВК (официальные клиенты)
 const DEFAULT_APP = [
-    "android" => [
+    'android' => [
         'id' => 2274003,
-        'secret' => 'hHbZxrka2uZ6jB1inYsH'
+        'secret' => 'hHbZxrka2uZ6jB1inYsH',
     ],
     'iphone' => [
         'id' => 3140623,
-        'secret' => 'VeWdmVclDCtn6ihuP1nt'
+        'secret' => 'VeWdmVclDCtn6ihuP1nt',
     ],
     'ipad' => [
         'id' => 3682744,
-        'secret' => 'mY6CDUswIVdJLCD3j15n'
+        'secret' => 'mY6CDUswIVdJLCD3j15n',
     ],
     'windows_desktop' => [
         'id' => 3697615,
-        'secret' => 'AlVXZFMUqyrnABp8ncuU'
+        'secret' => 'AlVXZFMUqyrnABp8ncuU',
     ],
     'vk_messenger' => [
         'id' => 5027722,
-        'secret' => 'Skg1Tn1r2qEbbZIAJMx3'
-    ]
+        'secret' => 'Skg1Tn1r2qEbbZIAJMx3',
+    ],
 ];
 
 const DEFAULT_ERROR_LOG = E_ALL; //E_ERROR | E_PARSE | E_COMPILE_ERROR | E_CORE_ERROR

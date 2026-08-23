@@ -17,7 +17,6 @@ class AsButton
         public string $label = 'Базовая кнопка',
         public ?string $payload = null,
         public string $color = 'blue',
-        public string $type = 'text'
-    ) {
-    }
+        public string $type = 'text',
+    ) {}
 }

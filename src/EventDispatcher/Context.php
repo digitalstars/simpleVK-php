@@ -34,8 +34,7 @@ class Context
          * Фабрика для создания экземпляров классов, предоставленная пользователем.
          */
         private readonly ?Closure $factory = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Возвращает значение атрибута.
@@ -75,7 +74,7 @@ class Context
 
         if (!is_callable($this->factory)) {
             throw new RuntimeException(
-                'The dependency resolver (factory/container) is not available in the current context.'
+                'The dependency resolver (factory/container) is not available in the current context.',
             );
         }
 

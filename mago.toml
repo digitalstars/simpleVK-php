@@ -22,7 +22,10 @@ preset = "default"
 minimum-fail-level = "warning"
 
 [linter.rules]
-strict-types = { enabled = true, level = "error" }
+# Осознанно выключено: declare(strict_types=1) не используется в библиотеке,
+# т.к. строгий режим вместе с новыми нативными типами даст пользователям
+# новые TypeError на строковых данных из VK API (ломает обратную совместимость)
+strict-types = { enabled = false }
 no-eval = { enabled = true, level = "error" }
 no-global = { enabled = true, level = "error" }
 no-error-control-operator = { enabled = true, level = "warning" }
@@ -40,37 +43,49 @@ too-many-properties = { enabled = false }
 ambiguous-function-call = { enabled = false }
 literal-named-argument = { enabled = false }
 halstead = { effort-threshold = 12000, volume-threshold = 2000 }
-kan-defect = { enabled = false }
 
 [analyzer]
 ignore = [
-    # Данные из VK API приходят нетипизированными — это домен библиотеки
+    # --- Данные VK API приходят нетипизированными (домен библиотеки) ---
     "mixed-method-access",
     "mixed-property-access",
     "mixed-argument",
     "mixed-assignment",
+    "mixed-array-assignment",
     "mixed-operand",
     "mixed-array-access",
     "mixed-return-statement",
     "invalid-type-cast",
     "imprecise-type",
+    "possibly-false-argument",
     "possibly-false-operand",
     "possibly-null-argument",
     "possibly-null-array-index",
     "incompatible-parameter-type",
     "mixed-property-type-coercion",
     "property-type-coercion",
-    # Снимется после типизации attachment() (заметки tower_bot: SIMPLEVK_MAGO_NOTES.md)
-    "too-many-arguments",
+    "invalid-iterator",            # foreach по массивам, полученным из VK API
+    "null-operand",                # конкатенация с данными из VK
+    "less-specific-argument",
+    "less-specific-nested-argument-type",
+    "less-specific-nested-return-statement",
+    "less-specific-return-statement",
+    "invalid-callable",
+    "possibly-null-property-access",
+
+    # --- Обратная совместимость: $vk остаётся nullable (Message можно создать без vk) ---
+    "possible-method-access-on-null",
+
+    # --- Ложные срабатывания анализатора ---
+    "non-existent-method",         # FFI C-методы и методы, приходящие из трейтов
+    "non-existent-property",       # свойства трейта Request ($auth/$token)
+    "non-existent-function",       # litespeed_finish_request (ext отсутствует локально)
+    "reference-constraint-violation", # by-ref параметры &$cfg — часть публичного API
+    "undefined-variable",          # init*-API создаёт переменные через ссылки
     "unevaluated-code",
     "non-existent-class-constant",
     "no-value",
     "invalid-operand",
-    "less-specific-argument",
-    "less-specific-nested-argument-type",
-    "less-specific-nested-return-statement",
-    "invalid-callable",
-    "possibly-null-property-access",
 ]
 
 find-unused-definitions = false
