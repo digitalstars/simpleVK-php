@@ -10,7 +10,7 @@ use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
  */
 final class FakeTransport implements Transport
 {
-    /** @var array<string, list<array<string, mixed>>> Очередь ответов по методам. */
+    /** @var array<string, array{repeat: bool, items: list<mixed>}> */
     private array $responses = [];
 
     /** @var list<array{method: string, params: array<string, mixed>}> */
@@ -33,7 +33,7 @@ final class FakeTransport implements Transport
      */
     public function setResponse(string $method, mixed $response): self
     {
-        $this->responses[$method] = [$response];
+        $this->responses[$method] = ['repeat' => true, 'items' => [$response]];
 
         return $this;
     }
@@ -45,7 +45,7 @@ final class FakeTransport implements Transport
      */
     public function setResponseQueue(string $method, array $responses): self
     {
-        $this->responses[$method] = \array_values($responses);
+        $this->responses[$method] = ['repeat' => false, 'items' => \array_values($responses)];
 
         return $this;
     }
@@ -53,17 +53,20 @@ final class FakeTransport implements Transport
     public function call(string $method, array $params = []): array
     {
         $this->calls[] = ['method' => $method, 'params' => $params];
+        $entry = $this->responses[$method] ?? null;
 
-        if (!isset($this->responses[$method]) || $this->responses[$method] === []) {
+        if ($entry === null || !$entry['repeat'] && $entry['items'] === []) {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
                 "FakeTransport: нет заготовленного ответа для метода {$method}",
             );
         }
 
-        $value = \array_shift($this->responses[$method]);
+        if ($entry['repeat']) {
+            return ['response' => $entry['items'][0]];
+        }
 
-        return ['response' => $value];
+        return ['response' => \array_shift($this->responses[$method]['items'])];
     }
 
     /**

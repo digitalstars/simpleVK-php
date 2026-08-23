@@ -19,8 +19,7 @@ readonly class Update
         /** ID группы, из которой пришло событие. */
         public int $groupId,
         public array $raw,
-    ) {
-    }
+    ) {}
 
     /**
      * Фабрика из сырого update LongPoll-ответа.

@@ -57,19 +57,17 @@ final class ApiClient
     public function callAsync(string $method, array $params = []): Future
     {
         if (!$this->transport instanceof AsyncTransport) {
-            throw new SimpleVkException(
-                SimpleVkException::TRANSPORT_ERROR,
-                \sprintf(
-                    'Транспорт %s не поддерживает асинхронные вызовы. Подключите AsyncTransport (например AmpAdapter::transport()).',
-                    $this->transport::class,
-                ),
-            );
+            throw new SimpleVkException(SimpleVkException::TRANSPORT_ERROR, \sprintf(
+                'Транспорт %s не поддерживает асинхронные вызовы. Подключите AsyncTransport (например AmpAdapter::transport()).',
+                $this->transport::class,
+            ));
         }
 
         $prepared = $this->prepareParams($params);
 
-        return $this->transport->callAsync($method, $prepared)
-            ->map(fn (array $envelope): array => $this->unwrap($method, $envelope));
+        return $this->transport->callAsync($method, $prepared)->map(
+            fn(array $envelope): array => $this->unwrap($method, $envelope),
+        );
     }
 
     /**
@@ -83,7 +81,7 @@ final class ApiClient
         $attempts = $this->config->retryMaxAttempts;
         $backoffMs = $this->config->retryBackoffMs;
 
-        for ($attempt = 1; ; ++$attempt) {
+        for ($attempt = 1;; ++$attempt) {
             $this->throttle();
 
             try {
@@ -122,7 +120,10 @@ final class ApiClient
         foreach ($params as $key => $value) {
             if (\is_array($value)) {
                 // Вложенные структуры VK API ожидает в JSON (keyboard, forward и т.п.)
-                $params[$key] = \json_encode($value, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR);
+                $params[$key] = \json_encode(
+                    $value,
+                    \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES | \JSON_THROW_ON_ERROR,
+                );
             }
         }
 

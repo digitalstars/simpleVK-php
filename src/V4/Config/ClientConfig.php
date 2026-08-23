@@ -5,10 +5,10 @@ namespace DigitalStars\SimpleVK\V4\Config;
 use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
 use DigitalStars\SimpleVK\V4\Transport\CurlTransport;
 use DigitalStars\SimpleVK\V4\Transport\Transport;
-use SensitiveParameter;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Psr\SimpleCache\CacheInterface;
+use SensitiveParameter;
 
 /**
  * Иммутабельный DTO-конфигурация клиента VK.
@@ -48,12 +48,8 @@ final class ClientConfig
     /**
      * @param non-empty-string $token
      */
-    public static function create(
-        #[SensitiveParameter]
-        string $token,
-        int $groupId,
-        string $apiVersion = '5.199',
-    ): self {
+    public static function create(#[SensitiveParameter] string $token, int $groupId, string $apiVersion = '5.199'): self
+    {
         return new self(token: $token, groupId: $groupId, apiVersion: $apiVersion);
     }
 
@@ -65,7 +61,7 @@ final class ClientConfig
      */
     public static function fromEnv(string $prefix = self::ENV_PREFIX_DEFAULT): self
     {
-        $token = \getenv("{$prefix}_TOKEN") ?: ($_ENV["{$prefix}_TOKEN"] ?? $_SERVER["{$prefix}_TOKEN"] ?? '');
+        $token = \getenv("{$prefix}_TOKEN") ?: $_ENV["{$prefix}_TOKEN"] ?? $_SERVER["{$prefix}_TOKEN"] ?? '';
         if ($token === '') {
             throw new SimpleVkException(
                 SimpleVkException::TRANSPORT_ERROR,
@@ -73,9 +69,10 @@ final class ClientConfig
             );
         }
 
-        $groupIdRaw = \getenv("{$prefix}_GROUP_ID") ?: ($_ENV["{$prefix}_GROUP_ID"] ?? $_SERVER["{$prefix}_GROUP_ID"] ?? '0');
-        $versionRaw = \getenv("{$prefix}_API_VERSION") ?: ($_ENV["{$prefix}_API_VERSION"] ?? '5.199');
-        $secretRaw = \getenv("{$prefix}_CONFIRMATION_SECRET") ?: ($_ENV["{$prefix}_CONFIRMATION_SECRET"] ?? '');
+        $groupIdRaw = \getenv("{$prefix}_GROUP_ID")
+        ?: $_ENV["{$prefix}_GROUP_ID"] ?? $_SERVER["{$prefix}_GROUP_ID"] ?? '0';
+        $versionRaw = \getenv("{$prefix}_API_VERSION") ?: $_ENV["{$prefix}_API_VERSION"] ?? '5.199';
+        $secretRaw = \getenv("{$prefix}_CONFIRMATION_SECRET") ?: $_ENV["{$prefix}_CONFIRMATION_SECRET"] ?? '';
 
         return new self(
             token: (string) $token,
