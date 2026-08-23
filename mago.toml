@@ -44,6 +44,7 @@ ambiguous-function-call = { enabled = false }
 literal-named-argument = { enabled = false }
 halstead = { effort-threshold = 12000, volume-threshold = 2000 }
 too-many-enum-cases = { enabled = false } # UpdateType — полный домен событий VK API
+kan-defect = { enabled = false } # Эвристика Kan даёт FP на builder-классах с цепочками методов
 
 [analyzer]
 ignore = [
