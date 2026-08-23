@@ -17,6 +17,7 @@ final class OAuth
 
     public function __construct(
         private readonly int $appId,
+        #[SensitiveParameter]
         private readonly string $clientSecret,
         private readonly string $redirectUri,
         /** @var list<string> Скоупы через пробел, например ['messages', 'groups']. */

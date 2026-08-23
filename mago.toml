@@ -45,6 +45,8 @@ literal-named-argument = { enabled = false }
 halstead = { effort-threshold = 12000, volume-threshold = 2000 }
 too-many-enum-cases = { enabled = false } # UpdateType — полный домен событий VK API
 kan-defect = { enabled = false } # Эвристика Kan даёт FP на builder-классах с цепочками методов
+no-shorthand-ternary = { enabled = false } # ?: — идиоматичный fallback для ENV/данных VK API
+no-isset = { enabled = false } # isset() на сырых массивах VK API — базовый паттерн библиотеки
 
 [analyzer]
 ignore = [
