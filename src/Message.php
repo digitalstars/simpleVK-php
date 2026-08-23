@@ -1,34 +1,37 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DigitalStars\SimpleVK;
 
 use DigitalStars\SimpleVK\Attributes\AsButton;
 use DigitalStars\SimpleVK\EventDispatcher\BaseButton;
 
-class Message extends BaseConstructor
-{
+/**
+ * Конструктор и отправитель сообщений messages.send / messages.edit.
+ */
+class Message extends BaseConstructor {
     use FileUploader;
 
-    public static function create($vk = null, &$cfg = null)
-    {
+    /** @param array|null $cfg */
+    public static function create($vk = null, &$cfg = null): static {
         return new self($vk, $cfg);
     }
 
-    public function voice($path): Message
-    {
+    public function voice(string $path): static {
         $this->config['voice'] = $path;
         return $this;
     }
 
-    public function getVoice()
-    {
+    public function getVoice(): ?string {
         return $this->config['voice'] ?? null;
     }
 
-    public function load($cfg = [])
-    {
+    /**
+     * Загружает конфиг из другого конструктора или массива.
+     *
+     * @param Message|array $cfg
+     * @return static
+     */
+    public function load($cfg = []): static {
         if ($cfg instanceof MessageBot) {
             return MessageBot::create($cfg->vk, $cfg->config, $cfg->bot, $cfg->buttons, $cfg->id_action);
         }
@@ -41,8 +44,12 @@ class Message extends BaseConstructor
         return $this;
     }
 
-    public function kbd(array|string|object $kbd = [], int|bool $inline = false, bool $one_time = false)
-    {
+    /**
+     * Задаёт клавиатуру: массив кнопок (id из Bot::btn или готовые конфиги), объект с __toString не поддерживается в Message.
+     *
+     * @param array|string|object $kbd
+     */
+    public function kbd(array|string|object $kbd = [], int|bool $inline = false, bool $one_time = false): static {
         $is_invalid_kbd = is_string($kbd);
         if (is_object($kbd)) {
             $kbd = [[$kbd]];
@@ -54,77 +61,74 @@ class Message extends BaseConstructor
                     if (is_string($col))
                         $is_invalid_kbd = true;
         if ($is_invalid_kbd)
-            throw new SimpleVkException(
-                0,
-                'Класс simpleVK не имеет доступ к указанным в kbd() кнопкам, потому что они созданы классом Bot. Используйте отправку сообщения через класс bot',
-            );
-        $this->config['kbd'] = ['kbd' => $kbd, 'inline' => (bool) $inline, 'one_time' => $one_time];
+            throw new SimpleVkException(0, "Класс simpleVK не имеет доступ к указанным в kbd() кнопкам, потому что они созданы классом Bot. Используйте отправку сообщения через класс bot");
+        $this->config['kbd'] = ['kbd' => $kbd, 'inline' => (bool)$inline, 'one_time' => $one_time];
         return $this;
     }
 
-    public function getKbd()
-    {
+    public function getKbd(): ?array {
         return $this->config['kbd'] ?? null;
     }
 
-    public function forward($message_ids = null, $conversation_message_ids = null, $peer_id = null, $owner_id = null)
-    {
+    /**
+     * Пересылка сообщений.
+     */
+    public function forward($message_ids = null, $conversation_message_ids = null, $peer_id = null, $owner_id = null): static {
         if ($message_ids == null && $conversation_message_ids == null) {
             $this->config['forward'] = ['forward' => []];
             return $this;
         }
 
         $ids = $message_ids ?: $conversation_message_ids;
-        $forward_messages = is_array($ids) ? implode(',', $ids) : $ids;
+        $forward_messages = (is_array($ids)) ? join(',', $ids) : $ids;
         if ($conversation_message_ids == null && $peer_id == null && $owner_id == null)
             $this->config['forward'] = ['forward_messages' => $forward_messages];
         else {
             $this->config['forward'] = ['forward' => [
-                $message_ids ? 'message_ids' : 'conversation_message_ids' => $forward_messages,
-                'peer_id' => $peer_id,
-            ]];
+                ($message_ids ? 'message_ids' : 'conversation_message_ids') => $forward_messages,
+                'peer_id' => $peer_id]];
             if ($owner_id)
                 $this->config['forward']['forward']['owner_id'] = $owner_id;
         }
         return $this;
     }
 
-    public function getForward()
-    {
+    public function getForward(): mixed {
         return $this->config['forward']['forward_messages'] ?? $this->config['forward']['forward'] ?? null;
     }
 
-    public function clearForward()
-    {
+    public function clearForward(): static {
         $this->config['forward'] = [];
         return $this;
     }
 
-    public function reply($message_id = null, $conversation_message_id = null, $peer_id = null)
-    {
+    /**
+     * Ответ (reply) на сообщение.
+     */
+    public function reply($message_id = null, $conversation_message_id = null, $peer_id = null): static {
         if ($message_id == null && $conversation_message_id == null) {
             $this->config['forward'] = ['forward' => ['is_reply' => true]];
             return $this;
         }
-        $this->config['forward'] = [
-            'forward' =>
-                [
-                    $message_id ? 'message_ids' : 'conversation_message_ids' => $message_id ?: $conversation_message_id,
-                    'is_reply' => true,
-                ] + ($peer_id ? ['peer_id' => $peer_id] : []),
-        ];
+        $this->config['forward'] = ['forward' => [
+            ($message_id ? 'message_ids' : 'conversation_message_ids') => $message_id ?: $conversation_message_id,
+            'is_reply' => true] + (($peer_id) ? ['peer_id' => $peer_id] : [])];
         return $this;
     }
 
-    public function carousel()
-    {
+    /** Добавляет карусель, возвращая её конструктор. */
+    public function carousel(): Carousel {
         $config = [];
         $this->config['carousel'][] = &$config;
         return Carousel::create($config, $this);
     }
 
-    public function setCarousel($carousel)
-    {
+    /**
+     * Добавляет готовые карусели (Carousel|Carousel[]).
+     *
+     * @param Carousel|Carousel[] $carousel
+     */
+    public function setCarousel(Carousel|array $carousel): static {
         if ($carousel instanceof Carousel)
             $carousel = [$carousel];
         foreach ($carousel as $element)
@@ -132,14 +136,15 @@ class Message extends BaseConstructor
         return $this;
     }
 
-    public function clearCarousel()
-    {
+    public function clearCarousel(): static {
         $this->config['carousel'] = [];
         return $this;
     }
 
-    public function uploadAllImages()
-    {
+    /**
+     * Загружает все отложенные изображения сразу и переносит их во вложения.
+     */
+    public function uploadAllImages(): static {
         $images = [];
         foreach ($this->config['img'] ?? [] as $img_path) {
             $img_path = $img_path[0];
@@ -150,17 +155,20 @@ class Message extends BaseConstructor
         return $this;
     }
 
-    protected function parseKbd($kbd)
-    {
+    protected function parseKbd(array $kbd): array {
         return $kbd;
     }
 
-    private function parseKeyboard($keyboard_raw = [])
-    {
+    /**
+     * Преобразует внутреннее представление клавиатуры в формат VK API.
+     */
+    private function parseKeyboard(array $keyboard_raw = []): array {
         $keyboard = [];
         foreach ($keyboard_raw as $row => $button_str) {
             foreach ($button_str as $col => $button) {
+
                 if ($button instanceof BaseButton) {
+
                     $reflection = new \ReflectionClass($button);
                     $asButtonAttr = $reflection->getAttributes(AsButton::class)[0] ?? null;
 
@@ -175,19 +183,18 @@ class Message extends BaseConstructor
                         $btnUI = $asButtonAttr->newInstance();
                         $label = $button->getLabel() ?? $btnUI->label;
                         $color = $button->getColor() ?? $btnUI->color;
-                        $type = $button->getType() ?? $btnUI->type;
+                        $type  = $button->getType()  ?? $btnUI->type;
                         $actionName = $btnUI->payload ?? $reflection->getShortName();
                     } else {
                         // Если атрибута нет, все параметры должны быть заданы динамически
                         $label = $button->getLabel();
                         $color = $button->getColor();
-                        $type = $button->getType();
+                        $type  = $button->getType();
                         $actionName = $reflection->getShortName();
                     }
 
                     // Если после всех проверок нет текста на кнопке, она невалидна
-                    if (!$label)
-                        continue;
+                    if (!$label) continue;
 
                     // 2. Собираем payload
                     $finalPayload = $button->getPayload(); // Берем кастомный payload из Action
@@ -196,15 +203,18 @@ class Message extends BaseConstructor
                     // 3. Собираем кнопку в формате, понятном VK API
                     $vkButton = [
                         'action' => [
-                            'type' => $type,
+                            'type'    => $type,
                             'payload' => $finalPayload ? json_encode($finalPayload, JSON_UNESCAPED_UNICODE) : null,
-                            'label' => $label,
+                            'label'   => $label,
                         ],
-                        'color' => SimpleVK::$color_replacer[$color] ?? $color,
+                        'color' => SimpleVK::$color_replacer[$color] ?? $color
                     ];
 
                     // 4. Очищаем от null-значений, чтобы не отправлять их в API
-                    $vkButton['action'] = array_filter($vkButton['action'], static fn($value) => !is_null($value));
+                    $vkButton['action'] = array_filter(
+                        $vkButton['action'],
+                        static fn($value) => !is_null($value)
+                    );
 
                     $keyboard[$row][$col] = $vkButton;
 
@@ -213,59 +223,53 @@ class Message extends BaseConstructor
 
                 $keyboard[$row][$col]['action']['type'] = $button[0];
                 if ($button[1] != null)
-                    $keyboard[$row][$col]['action']['payload'] = json_encode(
-                        $button[1],
-                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-                    );
+                    $keyboard[$row][$col]['action']['payload'] = json_encode($button[1], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 switch ($button[0]) {
                     case 'callback':
                     case 'text':
-                        {
-                            $keyboard[$row][$col]['color'] = $button[3];
-                            $keyboard[$row][$col]['action']['label'] = $button[2];
-                            break;
-                        }
+                    {
+                        $keyboard[$row][$col]['color'] = $button[3];
+                        $keyboard[$row][$col]['action']['label'] = $button[2];
+                        break;
+                    }
                     case 'vkpay':
-                        {
-                            $keyboard[$row][$col]['action']['hash'] = "action={$button[2]}";
-                            $keyboard[$row][$col]['action']['hash'] .= $button[3] < 0
-                                ? '&group_id=' . ($button[3] * -1)
-                                : "&user_id={$button[3]}";
-                            $keyboard[$row][$col]['action']['hash'] .= isset($button[4]) ? "&amount={$button[4]}" : '';
-                            $keyboard[$row][$col]['action']['hash'] .= isset($button[5])
-                                ? "&description={$button[5]}"
-                                : '';
-                            $keyboard[$row][$col]['action']['hash'] .= isset($button[6]) ? "&data={$button[6]}" : '';
-                            $keyboard[$row][$col]['action']['hash'] .= '&aid=1';
-                            break;
-                        }
+                    {
+                        $hash = "action={$button[2]}";
+                        $hash .= ($button[3] < 0) ? "&group_id=" . $button[3] * -1 : "&user_id={$button[3]}";
+                        $hash .= (isset($button[4])) ? "&amount={$button[4]}" : '';
+                        $hash .= (isset($button[5])) ? "&description={$button[5]}" : '';
+                        $hash .= (isset($button[6])) ? "&data={$button[6]}" : '';
+                        $hash .= '&aid=1';
+                        $keyboard[$row][$col]['action']['hash'] = $hash;
+                        break;
+                    }
                     case 'open_app':
-                        {
-                            $keyboard[$row][$col]['action']['label'] = $button[2];
-                            $keyboard[$row][$col]['action']['app_id'] = $button[3];
-                            if (isset($button[4]))
-                                $keyboard[$row][$col]['action']['owner_id'] = $button[4];
-                            if (isset($button[5]))
-                                $keyboard[$row][$col]['action']['hash'] = $button[5];
-                            break;
-                        }
+                    {
+                        $keyboard[$row][$col]['action']['label'] = $button[2];
+                        $keyboard[$row][$col]['action']['app_id'] = $button[3];
+                        if (isset($button[4]))
+                            $keyboard[$row][$col]['action']['owner_id'] = $button[4];
+                        if (isset($button[5]))
+                            $keyboard[$row][$col]['action']['hash'] = $button[5];
+                        break;
+                    }
                     case 'open_link':
-                        {
-                            $keyboard[$row][$col]['action']['link'] = $button[2];
-                            $keyboard[$row][$col]['action']['label'] = $button[3];
-                            break;
-                        }
+                    {
+                        $keyboard[$row][$col]['action']['link'] = $button[2];
+                        $keyboard[$row][$col]['action']['label'] = $button[3];
+                        break;
+                    }
                 }
             }
         }
         return $keyboard;
     }
 
-    private function generateCarousel($carousels, $id)
-    {
-        if (!is_array($carousels))
-            $carousels = [$carousels];
-        $template = ['type' => 'carousel', 'elements' => []];
+    /**
+     * Собирает JSON шаблона карусели для параметра template.
+     */
+    private function generateCarousel(array $carousels, int $id): string {
+        $template = ["type" => 'carousel', 'elements' => []];
         foreach ($carousels as $carousel) {
             if ($carousel instanceof Carousel)
                 $carousel = $carousel->dump();
@@ -279,18 +283,18 @@ class Message extends BaseConstructor
             if (isset($carousel['attachment']))
                 $element['photo_id'] = $carousel['attachment'];
             if (isset($carousel['img']))
-                $element['photo_id'] = str_replace(
-                    'photo',
-                    '',
-                    $this->getMsgAttachmentUploadImage($id, $carousel['img']),
-                );
+                $element['photo_id'] = str_replace('photo', '', $this->getMsgAttachmentUploadImage($id, $carousel['img']));
             $template['elements'][] = $element;
         }
         return json_encode($template, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    private function assembleMsg($id, $var)
-    {
+    /**
+     * Собирает параметры запроса из конфига (вложения, клавиатура, forward, карусель, текст).
+     *
+     * @return array|null null — если preProcessing прервал отправку.
+     */
+    private function assembleMsg(int $id, $var): ?array {
         $this->config_cache = $this->config;
 
         if ($this->preProcessing($var))
@@ -311,7 +315,7 @@ class Message extends BaseConstructor
             $attachments = array_merge($attachments, $this->config['params']['attachment']);
             unset($this->config['params']['attachment']);
         }
-        $attachments = !empty($attachments) ? ['attachment' => implode(',', $attachments)] : [];
+        $attachments = !empty($attachments) ? ['attachment' => join(",", $attachments)] : [];
 
         if (!empty($this->config['carousel'])) {
             $carousels = $this->config['carousel'];
@@ -326,7 +330,7 @@ class Message extends BaseConstructor
             $kbd = ['keyboard' => json_encode([
                 'one_time' => $this->config['kbd']['one_time'],
                 'buttons' => $this->parseKeyboard($this->parseKbd($this->config['kbd']['kbd'])),
-                'inline' => $this->config['kbd']['inline'],
+                'inline' => $this->config['kbd']['inline']
             ], JSON_UNESCAPED_UNICODE)];
         else
             $kbd = [];
@@ -351,39 +355,50 @@ class Message extends BaseConstructor
         return $text + $params + $attachments + $kbd + $template + $forward;
     }
 
-    public function sendEdit($peer_id = null, $message_id = null, $cmid = null, $var = null)
-    {
+    /**
+     * Редактирует ранее отправленное сообщение (messages.edit).
+     *
+     * @return mixed Результат метода либо conversation/message id после postProcessing.
+     */
+    public function sendEdit(int|string|null $peer_id = null, int|string|null $message_id = null, int|string|null $cmid = null, $var = null) {
         if (!$peer_id) {
             $this->vk->initPeerID($peer_id);
         }
         if ($cmid == null && $message_id == null) {
             $this->vk->initConversationMsgID($cmid);
         }
-        $query = $this->assembleMsg($peer_id, $var);
+        $query = $this->assembleMsg((int)$peer_id, $var);
 
         if (empty($query))
             $result = null;
         else {
             $message_id_key = is_null($message_id) ? 'conversation_message_id' : 'message_id';
-            $message_id ??= $cmid;
+            $message_id = $message_id ?? $cmid;
             $result = $this->request('messages.edit', ['peer_id' => $peer_id, $message_id_key => $message_id] + $query);
         }
         $this->postProcessing($peer_id, $message_id ?? $result, $var);
         return $result;
     }
 
-    public function send($id = null, $vk = null, $var = null)
-    {
+    /**
+     * Отправляет сообщение (messages.send).
+     *
+     * @param int|string|array|null $id peer_id или массив peer_ids.
+     * @param SimpleVK|null $vk Экземпляр SimpleVK, если не был передан ранее.
+     * @param mixed $var Переменная, пробрасываемая в func/func_after.
+     * @return int|array|null conversation_message_id (или массив id для рассылки).
+     */
+    public function send($id = null, $vk = null, $var = null) {
         if (empty($this->vk) and isset($vk))
             $this->vk = $vk;
         if (empty($this->vk))
-            throw new SimpleVkException(0, 'Экземпляр SimpleVK не передан');
+            throw new SimpleVkException(0, "Экземпляр SimpleVK не передан");
         if (!empty($this->config['real_id']))
             $id = $this->config['real_id'];
         if (empty($id))
             $this->vk->initPeerID($id);
 
-        $query = $this->assembleMsg($id, $var);
+        $query = $this->assembleMsg(is_array($id) ? 0 : (int)$id, $var);
         if (is_null($query)) {
             return null;
         }
@@ -391,7 +406,7 @@ class Message extends BaseConstructor
         if (empty($query)) {
             $result = null;
         } else {
-            $ids = is_array($id) ? implode(',', $id) : $id;
+            $ids = is_array($id) ? join(',', $id) : $id;
             $result = $this->request('messages.send', ['peer_ids' => $ids, 'random_id' => 0] + $query);
             if (!is_array($id)) {
                 $result = $result[0]['conversation_message_id'] ?? null;

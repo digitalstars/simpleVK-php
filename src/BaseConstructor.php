@@ -1,18 +1,17 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DigitalStars\SimpleVK;
 
-class BaseConstructor
-{
-    protected $config;
-    protected $config_cache;
-    /** @var SimpleVK */
+/**
+ * Базовый конструктор сообщений/постов: текст, вложения, цепочки функций.
+ */
+class BaseConstructor {
+    protected array $config;
+    protected array $config_cache;
+    /** @var SimpleVK|null */
     protected $vk = null;
 
-    public function __construct($vk = null, &$cfg = null)
-    {
+    public function __construct($vk = null, &$cfg = null) {
         if (!isset($cfg))
             $this->config = [];
         else
@@ -20,8 +19,10 @@ class BaseConstructor
         $this->vk = $vk;
     }
 
-    public function __call($name, $arguments)
-    {
+    /**
+     * Магическое добавление функций в цепочку: a_<func>() — после отправки, b_<func>() — до.
+     */
+    public function __call($name, $arguments) {
         $prefix = substr($name, 0, 2);
         $func = substr($name, 2);
         if ($prefix == 'a_')
@@ -37,78 +38,70 @@ class BaseConstructor
         return $this;
     }
 
-    public function a_sleep($time)
-    {
+    public function a_sleep(int|string|float $time): static {
         $this->config['func_after_chain'][] = ['f' => 'sleep', 'args' => [$time]];
         return $this;
     }
 
-    public function b_sleep($time)
-    {
+    public function b_sleep(int|string|float $time): static {
         $this->config['func_before_chain'][] = ['f' => 'sleep', 'args' => [$time]];
         return $this;
     }
 
-    public function clearChainAfter()
-    {
+    public function clearChainAfter(): static {
         $this->config['func_after_chain'] = [];
         return $this;
     }
 
-    public function getChainAfter()
-    {
+    public function getChainAfter(): ?array {
         return $this->config['func_after_chain'] ?? null;
     }
 
-    public function clearChainBefore()
-    {
+    public function clearChainBefore(): static {
         $this->config['func_before_chain'] = [];
         return $this;
     }
 
-    public function getChainBefore()
-    {
+    public function getChainBefore(): ?array {
         return $this->config['func_before_chain'] ?? null;
     }
 
-    public function text($text)
-    {
+    public function text(string $text): static {
         $this->config['text'] = $text;
         return $this;
     }
 
-    public function img()
-    {
-        $this->config['img'] = $this->imgParse(func_get_args());
+    /** Задаёт изображения (пути/URL, в т.ч. вложенными массивами). */
+    public function img(mixed ...$imgs): static {
+        $this->config['img'] = $this->imgParse($imgs);
         return $this;
     }
 
-    public function doc()
-    {
-        $this->config['doc'] = $this->docParse(func_get_args());
+    /** Задаёт документы (строки или ['path' => ..., 'title' => ...]). */
+    public function doc(mixed ...$docs): static {
+        $this->config['doc'] = $this->docParse($docs);
         return $this;
     }
 
-    public function addDoc()
-    {
+    /** Добавляет документы к уже заданным. */
+    public function addDoc(mixed ...$docs): static {
         if (empty($this->config['doc']))
-            $this->config['doc'] = $this->docParse(func_get_args());
+            $this->config['doc'] = $this->docParse($docs);
         else
-            $this->config['doc'] = array_merge($this->config['doc'], $this->docParse(func_get_args()));
+            $this->config['doc'] = array_merge($this->config['doc'], $this->docParse($docs));
         return $this;
     }
 
-    public function addImg()
-    {
+    /** Добавляет изображения к уже заданным. */
+    public function addImg(mixed ...$imgs): static {
         if (empty($this->config['img']))
-            $this->config['img'] = $this->imgParse(func_get_args());
+            $this->config['img'] = $this->imgParse($imgs);
         else
-            $this->config['img'] = array_merge($this->config['img'], $this->imgParse(func_get_args()));
+            $this->config['img'] = array_merge($this->config['img'], $this->imgParse($imgs));
         return $this;
     }
 
-    private function removeEx(&$extends, $removed)
-    {
+    private function removeEx(array &$extends, array $removed): static {
         if (empty($removed)) {
             return $this;
         }
@@ -128,121 +121,107 @@ class BaseConstructor
         return $this;
     }
 
-    public function removeDoc()
-    {
-        return $this->removeEx($this->config['doc'], $this->docParse(func_get_args()));
+    public function removeDoc(mixed ...$docs): static {
+        return $this->removeEx($this->config['doc'], $this->docParse($docs));
     }
 
-    public function removeImg()
-    {
-        return $this->removeEx($this->config['img'], $this->imgParse(func_get_args()));
+    public function removeImg(mixed ...$imgs): static {
+        return $this->removeEx($this->config['img'], $this->imgParse($imgs));
     }
 
-    public function removeAttachment()
-    {
-        return $this->removeEx($this->config['attachments'], $this->attachmentParse(func_get_args()));
+    public function removeAttachment(mixed ...$attachs): static {
+        return $this->removeEx($this->config['attachments'], $this->attachmentParse($attachs));
     }
 
-    public function params($params)
-    {
+    /** Произвольные дополнительные параметры метода VK API. */
+    public function params(array $params): static {
         $this->config['params'] = $params;
         return $this;
     }
 
-    public function attachment()
-    {
-        $this->config['attachments'] = $this->attachmentParse(func_get_args());
+    /** Задаёт готовые вложения (например photo123_456), перезаписывая предыдущие. */
+    public function attachment(string|array ...$attachs): static {
+        $this->config['attachments'] = $this->attachmentParse($attachs);
         return $this;
     }
 
-    public function addAttachment()
-    {
+    /** Добавляет готовые вложения к уже заданным. */
+    public function addAttachment(string|array ...$attachs): static {
         if (empty($this->config['attachments']))
-            $this->config['attachments'] = $this->attachmentParse(func_get_args());
+            $this->config['attachments'] = $this->attachmentParse($attachs);
         else
-            $this->config['attachments'] = array_merge(
-                $this->config['attachments'],
-                $this->attachmentParse(func_get_args()),
-            );
+            $this->config['attachments'] = array_merge($this->config['attachments'], $this->attachmentParse($attachs));
         return $this;
     }
 
-    public function func($func = null)
-    {
+    /**
+     * Замыкание, вызываемое перед отправкой: fn(Message $msg, mixed $var): bool|null.
+     * Если возвращает truthy — отправка прерывается.
+     */
+    public function func(?callable $func = null): static {
         $this->config['func'] = $func;
         return $this;
     }
 
-    public function afterFunc($func = null)
-    {
+    /** Замыкание, вызываемое после отправки: fn(mixed $result, mixed $var): bool|null. */
+    public function afterFunc(?callable $func = null): static {
         $this->config['func_after'] = $func;
         return $this;
     }
 
-    public function getFunc()
-    {
+    public function getFunc(): ?callable {
         return $this->config['func'] ?? null;
     }
 
-    public function getAfterFunc()
-    {
+    public function getAfterFunc(): ?callable {
         return $this->config['func_after'] ?? null;
     }
 
-    public function finalSendID($id)
-    {
+    /** Переопределяет итоговый peer_id/owner_id при отправке. */
+    public function finalSendID(int|string $id): static {
         $this->config['real_id'] = $id;
         return $this;
     }
 
-    public function getFinalSendID()
-    {
+    /** @return int|string|null */
+    public function getFinalSendID(): int|string|null {
         return $this->config['real_id'] ?? null;
     }
 
-    public function getDoc()
-    {
+    public function getDoc(): ?array {
         return $this->config['doc'] ?? null;
     }
 
-    public function getImg()
-    {
+    public function getImg(): array {
         return $this->config['img'] ?? [];
     }
 
-    public function getText()
-    {
+    public function getText(): string {
         return $this->config['text'] ?? '';
     }
 
-    public function getParams()
-    {
+    public function getParams(): array {
         return $this->config['params'] ?? [];
     }
 
-    public function getAttachment()
-    {
+    public function getAttachment(): array {
         return $this->config['attachments'] ?? [];
     }
 
-    public function dump()
-    {
+    public function dump(): array {
         return $this->config;
     }
 
-    protected function request($method, $params = [])
-    {
-        return $this->vk->request($method, $params);
+    protected function request(string $method, array $params = []) {
+        return $this->vk?->request($method, $params);
     }
 
-    protected function null()
-    {
+    protected function null(): true {
         $this->config = $this->config_cache;
         return true;
     }
 
-    protected function preProcessing($var)
-    {
+    protected function preProcessing($var): bool {
         if (isset($this->config['func']) and is_callable($this->config['func']))
             if ($this->config['func']($this, $var))
                 return $this->null();
@@ -251,10 +230,7 @@ class BaseConstructor
             foreach ($this->config['func_before_chain'] as $func) {
                 if ($func['f'] == 'run') {
                     if (!$is_isset_bot)
-                        throw new SimpleVkException(
-                            0,
-                            '->run() можно использовать только если Message создан через Bot',
-                        );
+                        throw new SimpleVkException(0, "->run() можно использовать только если Message создан через Bot");
                     $this->bot->run($func['args']);
                 } else
                     call_user_func_array($func['f'], $func['args']);
@@ -264,26 +240,18 @@ class BaseConstructor
         }
         if (!empty($this->config['event'])) {
             if (!isset($this->bot))
-                throw new SimpleVkException(
-                    0,
-                    'Методы ->event...() можно использовать только если Message создан через Bot',
-                );
+                throw new SimpleVkException(0, "Методы ->event...() можно использовать только если Message создан через Bot");
             if ($this->config['event']['type'] == 0)
                 $this->vk->eventAnswerSnackbar($this->config['event']['text']);
             else if ($this->config['event']['type'] == 1)
                 $this->vk->eventAnswerOpenLink($this->config['event']['url']);
             else if ($this->config['event']['type'] == 2)
-                $this->vk->eventAnswerOpenApp(
-                    $this->config['event']['app_id'],
-                    $this->config['event']['owner_id'],
-                    $this->config['event']['hash'],
-                );
+                $this->vk->eventAnswerOpenApp($this->config['event']['app_id'], $this->config['event']['owner_id'], $this->config['event']['hash']);
         }
         return false;
     }
 
-    protected function postProcessing($id, $result, $var)
-    {
+    protected function postProcessing($id, $result, $var): bool {
         if (isset($this->config['func_after']) and is_callable($this->config['func_after']))
             if ($this->config['func_after']($result, $var))
                 return $this->null();
@@ -292,17 +260,11 @@ class BaseConstructor
             foreach ($this->config['func_after_chain'] as $func) {
                 if ($func['f'] == 'run') {
                     if (!$is_isset_bot)
-                        throw new SimpleVkException(
-                            0,
-                            '->run() можно использовать только если Message создан через Bot',
-                        );
+                        throw new SimpleVkException(0, "->run() можно использовать только если Message создан через Bot");
                     $this->bot->run($func['args'], $id);
                 } else if ($func['f'] == 'edit') {
                     if (!$is_isset_bot)
-                        throw new SimpleVkException(
-                            0,
-                            '->edit() можно использовать только если Message создан через Bot',
-                        );
+                        throw new SimpleVkException(0, "->edit() можно использовать только если Message создан через Bot");
                     $this->bot->editRun($func['args'], $id, $result);
                 } else
                     call_user_func_array($func['f'], $func['args']);
@@ -313,8 +275,11 @@ class BaseConstructor
         return $this->null();
     }
 
-    private function imgParse($imgs)
-    {
+    /**
+     * @param array|string $imgs
+     * @return array
+     */
+    private function imgParse(array|string $imgs): array {
         if (is_string($imgs))
             return [[$imgs]];
         $result = [];
@@ -323,8 +288,11 @@ class BaseConstructor
         return $result;
     }
 
-    private function docParse($docs)
-    {
+    /**
+     * @param array|string $docs
+     * @return array
+     */
+    private function docParse(array|string $docs): array {
         if (is_string($docs))
             return [[$docs, null]];
         else if (isset($docs['path']))
@@ -335,8 +303,7 @@ class BaseConstructor
         return $result;
     }
 
-    private function attachmentParse($attachs)
-    {
+    private function attachmentParse(array $attachs): array {
         $result = [];
         foreach ($attachs as $attach)
             if (is_string($attach))

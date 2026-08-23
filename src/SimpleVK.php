@@ -1,55 +1,56 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DigitalStars\SimpleVK;
 
 use DigitalStars\SimpleVK\Internal\UniqueEventHandler;
 use Exception;
 
-require_once 'config_simplevk.php';
+require_once('config_simplevk.php');
 
-class SimpleVK
-{
-    use ErrorHandler;
-    use Request;
+class SimpleVK {
+    use ErrorHandler, Request;
 
-    protected $version;
-    public $data = [];
-    protected $data_backup = [];
-    protected $api_url = 'https://api.vk.ru/method/';
-    protected $token;
-    private static $debug_mode = false;
-    private static $retry_requests_processing = false;
-    protected $auth = null;
-    private $is_test_len_str = true;
-    protected $group_id = null;
-    public $time_checker = null;
+    protected ?string $version = null;
+    /** @var array Данные текущего события от VK (нормализованные). */
+    public array $data = [];
+    /** @var array Небезопасная (исходная) копия данных события. */
+    protected array $data_backup = [];
+    protected string $api_url = 'https://api.vk.ru/method/';
+    protected ?string $token = null;
+    private static bool $debug_mode = false;
+    private static bool $retry_requests_processing = false;
+    protected ?Auth $auth = null;
+    private bool $is_test_len_str = true;
+    protected ?int $group_id = null;
+    public ?float $time_checker = null;
 
     protected static ?\FFI $ffi = null;
 
-    public static function create(#[\SensitiveParameter] $token, $version, $also_version = null, $data = null)
-    {
+    /**
+     * Фабрика экземпляров SimpleVK.
+     *
+     * @param Auth|string $token Токен или объект Auth.
+     * @param string|float|int $version Версия API.
+     * @param string|float|int|null $also_version Версия API для авторизации по логину/паролю.
+     * @param string|null $data JSON события (иначе берётся из php://input).
+     */
+    public static function create($token, $version, $also_version = null, $data = null): static {
         return new self($token, $version, $also_version, $data);
     }
 
-    public function __construct(#[\SensitiveParameter] $token, $version, $also_version = null, $data = null)
-    {
-        if (
-            !self::$retry_requests_processing
-            && (
-                function_exists('getallheaders') && isset(getallheaders()['X-Retry-Counter'])
-                || isset($_SERVER['HTTP_X_RETRY_COUNTER'])
-            )
-        ) {
+    public function __construct($token, $version, $also_version = null, $data = null) {
+
+        if (!self::$retry_requests_processing &&
+            ((function_exists('getallheaders') && isset(getallheaders()['X-Retry-Counter'])) ||
+                isset($_SERVER['HTTP_X_RETRY_COUNTER']))) {
             exit('ok');
         }
 
-        if (!self::$ffi && extension_loaded('ffi')) {
+        if (!self::$ffi && extension_loaded("ffi")) {
             if (!in_array(ini_get('ffi.enable'), ['true', '1'], true)) {
                 @ini_set('ffi.enable', 'true');
                 if (!in_array(ini_get('ffi.enable'), ['true', '1'], true)) {
-                    throw new \RuntimeException('FFI is disabled in PHP configuration. Set ffi.enable = true');
+                    throw new \RuntimeException("FFI is disabled in PHP configuration. Set ffi.enable = true");
                 }
             }
             if (PHP_OS === 'WINNT') {
@@ -57,10 +58,10 @@ class SimpleVK
 
                 // Проверяем, содержит ли путь что-то кроме базовых ASCII символов
                 if (!str_contains($library_path, '~') && preg_match('/[^\x20-\x7E]/', $library_path)) {
-                    // Пытаемся получить короткое 8.3 имя через команду cmd
+                    // Пытаемся получить короткое 8.3 имя через команду cmd.
                     // Это трюк, который работает, если exec() разрешен и 8.3 имена включены в системе
                     $command = 'for %I in ("' . $library_path . '") do @echo %~sI';
-                    $short_path = exec($command);
+                    $short_path = (string)exec($command);
 
                     if ($short_path && file_exists($short_path)) {
                         $library_path = $short_path;
@@ -70,9 +71,8 @@ class SimpleVK
                 if ($library_path && file_exists($library_path)) {
                     try {
                         self::$ffi = \FFI::cdef(
-                            'char* convert_to_html_entities(const char* input);
-                void free_converted_string(char* result);',
-                            $library_path,
+                            "char* convert_to_html_entities(const char* input);
+                void free_converted_string(char* result);", $library_path
                         );
                     } catch (\FFI\Exception $e) {
                         $message = "FFI доступен, но не удалось загрузить библиотеку 'convert_to_html_entities.dll'.\n";
@@ -84,22 +84,26 @@ class SimpleVK
                     }
                 }
             } elseif (PHP_OS === 'Linux') {
-                $path = __DIR__ . '/../bin/libconvert_to_html_entities.so';
-                self::$ffi = \FFI::cdef('char* convert_to_html_entities(const char* input);
-                    void free_converted_string(char* result);', $path);
+                $path = __DIR__ . "/../bin/libconvert_to_html_entities.so";
+                self::$ffi = \FFI::cdef(
+                    "char* convert_to_html_entities(const char* input);
+                    void free_converted_string(char* result);", $path
+                );
             }
         }
 
-        if ((float) $version < 5.139) {
+        if ((float)($version) < 5.139) {
             throw new Exception('SimpleVK3 работает с VK API версиями 5.139 или выше. Вы запустили с v' . $version);
         }
 
         $this->processAuth($token, $version, $also_version);
         if ($data) {
-            $this->data = json_decode($data, 1);
+            $decoded = json_decode((string)$data, true);
         } else {
-            $this->data = json_decode(file_get_contents('php://input'), 1);
+            $input = file_get_contents('php://input');
+            $decoded = $input === false ? null : json_decode($input, true);
         }
+        $this->data = is_array($decoded) ? $decoded : [];
 
         $this->data_backup = $this->data;
 
@@ -123,53 +127,64 @@ class SimpleVK
         }
     }
 
-    public function __call($method, $args = [])
-    {
-        $method = str_replace('_', '.', $method);
-        $args = empty($args) ? $args : $args[0];
+    /**
+     * Магический вызов методов VK API: точки в имени метода заменяются на подчёркивания.
+     * Пример: $vk->messages_send(...) => messages.send
+     */
+    public function __call($method, $args = []) {
+        $method = str_replace("_", ".", $method);
+        $args = (empty($args)) ? [] : $args[0];
         return $this->request($method, $args);
     }
 
-    public static function retryRequestsProcessing($flag = true)
-    {
+    public static function retryRequestsProcessing(bool $flag = true): void {
         self::$retry_requests_processing = $flag;
     }
 
-    public static function disableSendOK($flag = true)
-    {
+    public static function disableSendOK(bool $flag = true): void {
         self::$debug_mode = $flag;
     }
 
-    public function setConfirm($str)
-    {
+    /**
+     * Отвечает 'ok' на confirmation-запрос Callback API.
+     */
+    public function setConfirm(string $str): static {
         if (isset($this->data['type']) && $this->data['type'] == 'confirmation') {
             exit($str);
         }
         return $this;
     }
 
-    public function setSecret($str)
-    {
+    /**
+     * Проверяет secret Callback API. При несовпадении завершает скрипт.
+     */
+    public function setSecret(string $str): static {
         if (isset($this->data['secret']) && $this->data['secret'] == $str) {
             return $this;
         }
         exit('security error');
     }
 
-    public function reply($message)
-    {
+    /**
+     * Отвечает на событие сообщением. Возвращает conversation_message_id.
+     */
+    public function reply(string $message) {
         $this->initPeerID($id);
         $result = $this->request('messages.send', ['peer_ids' => $id, 'message' => $message, 'random_id' => 0]);
         return $result[0]['conversation_message_id'] ?? null;
     }
 
-    public function msg($text = null)
-    {
+    /**
+     * Создает конструктор сообщения (флюент-интерфейс Message).
+     */
+    public function msg(?string $text = null): Message {
         return Message::create($this)->text($text);
     }
 
-    public function isAdmin($user_id, $chat_id)
-    { //возвращает привилегию по id
+    /**
+     * Возвращает привилегию пользователя в беседе: 'owner', 'admin', false или null.
+     */
+    public function isAdmin($user_id, $chat_id) { // возвращает привилегию по id
         try {
             $members = $this->request('messages.getConversationMembers', ['peer_id' => $chat_id])['items'];
         } catch (Exception $e) {
@@ -177,87 +192,96 @@ class SimpleVK
         }
         foreach ($members as $key) {
             if ($key['member_id'] == $user_id)
-                return isset($key['is_owner']) ? 'owner' : (isset($key['is_admin']) ? 'admin' : false);
+                return (isset($key["is_owner"])) ? 'owner' : ((isset($key["is_admin"])) ? 'admin' : false);
         }
         return null;
     }
 
-    public function initPeerID(&$id)
-    {
+    /** Инициализирует переменную значением peer_id из события. */
+    public function initPeerID(&$id): static {
         $id = $this->data['object']['peer_id'] ?? null;
         return $this;
     }
 
-    public function initText(&$text)
-    {
+    /** Инициализирует переменную текстом из события. */
+    public function initText(&$text): static {
         $text = $this->data['object']['text'] ?? null;
         return $this;
     }
 
-    public function initPayload(&$payload)
-    {
+    /** Инициализирует переменную payload из события. */
+    public function initPayload(&$payload): static {
         $payload = $this->getPayload();
         return $this;
     }
 
-    public function initUserID(&$user_id)
-    {
+    /** Инициализирует переменную ID автора события. */
+    public function initUserID(&$user_id): static {
         $user_id =
             $this->data['object']['deleter_id'] ?? // кто удалил коммент для wall_reply_delete / market_comment_delete
-            $this->data['object']['liker_id'] ?? //кто поставил лайк like_add / like_remove
-            $this->data['object']['from_id'] ?? $this->data['object']['user_id'] ?? $this->data['object']['owner_id']
-                ?? null;
+            $this->data['object']['liker_id'] ?? // кто поставил лайк like_add / like_remove
+            $this->data['object']['from_id'] ??
+            $this->data['object']['user_id'] ??
+            $this->data['object']['owner_id'] ?? null;
         return $this;
     }
 
-    public function initType(&$type)
-    {
+    /** Инициализирует переменную типом события. */
+    public function initType(&$type): static {
         $type = $this->data['type'] ?? null;
         return $this;
     }
 
-    public function initData(&$data)
-    {
+    /** Инициализирует переменную исходными данными события. */
+    public function initData(&$data): static {
         $data = $this->data_backup;
         return $this;
     }
 
-    public function initID(&$mid)
-    {
+    /** Инициализирует переменную id сообщения. */
+    public function initID(&$mid): static {
         $mid = $this->data['object']['id'] ?? null;
         return $this;
     }
 
-    public function initConversationMsgID(&$cmid)
-    {
+    /** Инициализирует переменную conversation_message_id. */
+    public function initConversationMsgID(&$cmid): static {
         $cmid = $this->data['object']['conversation_message_id'] ?? null;
         return $this;
     }
 
-    public function getAttachments()
-    {
+    /**
+     * Возвращает вложения события, сгруппированные по типу.
+     * Для user-longpoll (attach1_type) возвращается null (см. TODO ниже).
+     *
+     * @return array<string, array<int, array>>|null
+     */
+    public function getAttachments(): ?array {
         $data = $this->data;
-        return null;
         if (!isset($data['object']['attachments']))
             return null;
         $result = [];
-        if (isset($data['object']['attachments']['attach1_type'])) //TODO временная заглушка для user longpoll
+        if (isset($data['object']['attachments']['attach1_type'])) { //TODO временная заглушка для user longpoll
             return null;
+        }
         foreach ($data['object']['attachments'] as $key => $attachment) {
-            if (
-                $key
-                == 'attach1_type'
-            ) //TODO временная заглушка для user longpoll
+            if ($key === 'attach1_type') { //TODO временная заглушка для user longpoll
                 return null;
+            }
+            if (!is_array($attachment) || !isset($attachment['type']))
+                continue;
             $type = $attachment['type'];
-            $attachment = $attachment[$type];
+            $attachment = $attachment[$type] ?? null;
+            if (!is_array($attachment))
+                continue;
             if (isset($attachment['sizes'])) {
                 $preview = $attachment['sizes'];
                 unset($attachment['sizes']);
-            } else if (isset($attachment['preview']))
-                $preview = $attachment['preview']['photo']['sizes'];
-            else
+            } else if (isset($attachment['preview'])) {
+                $preview = $attachment['preview']['photo']['sizes'] ?? null;
+            } else {
                 $preview = null;
+            }
             if ($preview) {
                 $previews_result = [];
                 foreach ($preview as $item) {
@@ -269,68 +293,64 @@ class SimpleVK
             }
             $result[$type][] = $attachment;
         }
-        return $result;
+        return $result ?: null;
     }
 
-    public function getAffectedUsers($use_category = false, $category = ['fwd', 'reply', 'mention', 'url'])
-    {
+    /**
+     * Собирает пользователей, затронутых событием (пересланные, ответ, упоминания, ссылки).
+     *
+     * @param bool $use_category Вернуть сгруппированный по категориям результат.
+     * @param array|string $category Категории: fwd, reply, mention, url.
+     * @return array<int|string, mixed>
+     */
+    public function getAffectedUsers(bool $use_category = false, array|string $category = ['fwd', 'reply', 'mention', 'url']): array {
         $affected_users = [];
         $category = is_array($category) ? $category : [$category];
 
-        if (in_array('fwd', $category, strict: true)) {
+        if (in_array('fwd', $category, true)) {
             $fwd = $this->data['object']['fwd_messages'] ?? null;
             if ($fwd) {
                 foreach ($fwd as $value) {
                     $affected_users['fwd'][] = $value['from_id'];
-                    if (preg_match_all(
-                        "/\[(id|club|public)([0-9]*)\|[^\]]*\]/",
-                        $value['text'],
-                        $matches,
-                        PREG_SET_ORDER,
-                    )) {
-                        foreach ($matches as $key => $match) {
-                            $affected_users['fwd'][] = (int) ($match[1] == 'id' ? $match[2] : -$match[2]);
+                    if (preg_match_all("/\[(id|club|public)([0-9]*)\|[^\]]*\]/", (string)($value['text'] ?? ''), $matches, PREG_SET_ORDER)) {
+                        foreach ($matches as $match) {
+                            $affected_users['fwd'][] = (int)(($match[1] == 'id') ? $match[2] : -$match[2]);
                         }
                     }
                 }
             }
         }
 
-        if (in_array('reply', $category, strict: true)) {
+        if (in_array('reply', $category, true)) {
             $reply_from_id = $this->data['object']['reply_message']['from_id'] ?? null;
             if ($reply_from_id) {
                 $affected_users['reply'] = [$reply_from_id];
-                if (preg_match_all(
-                    "/\[(id|club|public)([0-9]*)\|[^\]]*\]/",
-                    $this->data['object']['reply_message']['text'],
-                    $matches,
-                    PREG_SET_ORDER,
-                )) {
-                    foreach ($matches as $key => $value) {
-                        $affected_users['reply'][] = (int) ($value[1] == 'id' ? $value[2] : -$value[2]);
+                if (preg_match_all("/\[(id|club|public)([0-9]*)\|[^\]]*\]/", (string)($this->data['object']['reply_message']['text'] ?? ''), $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $value) {
+                        $affected_users['reply'][] = (int)(($value[1] == 'id') ? $value[2] : -$value[2]);
                     }
                 }
             }
         }
 
-        $this->initText($msg);
+        $msg = $this->data['object']['text'] ?? null;
 
-        if (in_array('mention', $category, strict: true)) {
-            if (preg_match_all("/\[(id|club|public)([0-9]*)\|[^\]]*\]/", $msg, $matches, PREG_SET_ORDER)) {
-                foreach ($matches as $key => $value) {
-                    $affected_users['mention'][] = (int) ($value[1] == 'id' ? $value[2] : -$value[2]);
+        if (in_array('mention', $category, true)) {
+            if (preg_match_all("/\[(id|club|public)([0-9]*)\|[^\]]*\]/", (string)$msg, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $value) {
+                    $affected_users['mention'][] = (int)(($value[1] == 'id') ? $value[2] : -$value[2]);
                 }
             }
         }
 
-        if (in_array('url', $category, strict: true)) {
-            if (preg_match_all("/vk.ru\/(?:id([0-9]+)|([a-z0-9_.]+))/", $msg, $matches)) {
+        if (in_array('url', $category, true)) {
+            if (preg_match_all("/vk.ru\/(?:id([0-9]+)|([a-z0-9_.]+))/", (string)$msg, $matches)) {
                 $ids = array_filter(array_merge($matches[1], $matches[2]));
 
                 if (!empty($ids)) {
                     $user_ids = $this->userInfo($ids);
                     $user_ids = isset($user_ids['id']) ? [$user_ids] : $user_ids;
-                    $affected_users['url'] = array_column($user_ids, 'id') ?? [];
+                    $affected_users['url'] = array_column((array)$user_ids, 'id');
 
                     // Удаляем уже обработанные идентификаторы пользователей из списка
                     $group_ids = array_values(array_diff($ids, $affected_users['url']));
@@ -339,7 +359,7 @@ class SimpleVK
                     if (!empty($group_ids)) {
                         $group_ids = $this->groupInfo($group_ids);
                         $group_ids = isset($group_ids['id']) ? [$group_ids] : $group_ids;
-                        $group_ids = array_column($group_ids, 'id') ?? [];
+                        $group_ids = array_column((array)$group_ids, 'id');
                         $group_ids = array_map(static fn($el) => $el * -1, $group_ids);
 
                         $affected_users['url'] = array_merge($affected_users['url'], $group_ids);
@@ -355,21 +375,22 @@ class SimpleVK
         }
 
         if (!$use_category) {
-            return array_values(array_filter(array_merge(...array_values($affected_users))));
+            $values = array_values($affected_users);
+            if ($values === []) {
+                return [];
+            }
+            return array_values(array_filter(array_merge(...$values)));
         }
 
         return array_filter($affected_users);
     }
 
-    public function initVars(
-        &$peer_id = null,
-        &$user_id = null,
-        &$type = null,
-        &$message = null,
-        &$payload = null,
-        &$id = null,
-        &$attachments = null,
-    ) {
+    /**
+     * Инициализирует стандартный набор переменных из события одним вызовом.
+     *
+     * @return array Исходные данные события.
+     */
+    public function initVars(&$peer_id = null, &$user_id = null, &$type = null, &$message = null, &$payload = null, &$id = null, &$attachments = null): array {
         $data = $this->data;
         $type = $data['type'] ?? null;
         $peer_id = $data['object']['peer_id'] ?? null;
@@ -381,13 +402,12 @@ class SimpleVK
         return $this->data_backup;
     }
 
-    public function clientSupport(
-        &$keyboard = null,
-        &$inline = null,
-        &$carousel = null,
-        &$button_actions = null,
-        &$lang_id = null,
-    ) {
+    /**
+     * Информация о возможностях клиента (клавиатуры, инлайн, карусель и т.д.).
+     *
+     * @return array|null
+     */
+    public function clientSupport(&$keyboard = null, &$inline = null, &$carousel = null, &$button_actions = null, &$lang_id = null): ?array {
         $data = $this->data_backup['object']['client_info'] ?? null;
         $keyboard = $data['keyboard'] ?? null;
         $inline = $data['inline_keyboard'] ?? null;
@@ -397,8 +417,10 @@ class SimpleVK
         return $data;
     }
 
-    public function sendAllDialogs(Message $message)
-    {
+    /**
+     * Рассылка сообщения всем личным диалогам (пачками по 100 peer_ids).
+     */
+    public function sendAllDialogs(Message $message): void {
         $ids = [];
         $i = 0;
         $count = 0;
@@ -418,18 +440,20 @@ class SimpleVK
                 $ids = [];
                 $current_count = count(array_column($return, 'message_id'));
                 $count += $current_count;
-                print "Отправлено {$count}/{$members}" . PHP_EOL;
+                print "Отправлено $count/$members" . PHP_EOL;
             }
         }
         $return = $message->send($ids);
         $current_count = count(array_column($return, 'message_id'));
         $count += $current_count;
-        print "Всего было отправлено {$count}/{$members} сообщений" . PHP_EOL;
-        print 'Запретили отправлять сообщения ' . ($members - $count) . ' человек(либо это были чаты)';
+        print "Всего было отправлено $count/$members сообщений" . PHP_EOL;
+        print "Запретили отправлять сообщения " . ($members - $count) . " человек(либо это были чаты)";
     }
 
-    public function sendAllChats(Message $message)
-    {
+    /**
+     * Рассылка сообщения по беседам (перебор диапазона chat_id).
+     */
+    public function sendAllChats(Message $message): void {
         $message->uploadAllImages();
         $count = 0;
         print "Начинаю рассылку\n";
@@ -437,16 +461,15 @@ class SimpleVK
             $return = $message->send(range(2e9 + $i, 2e9 + $i + 99));
             $current_count = count(array_column($return, 'message_id'));
             $count += $current_count;
-            print "Отправлено {$count}" . PHP_EOL;
+            print "Отправлено $count" . PHP_EOL;
             if ($current_count != 100) {
-                print "Всего было разослано в {$count} бесед";
+                print "Всего было разослано в $count бесед";
                 break;
             }
         }
     }
 
-    public function eventAnswerSnackbar($text)
-    {
+    public function eventAnswerSnackbar(string $text): void {
         $this->checkTypeEvent();
         $this->request('messages.sendMessageEventAnswer', [
             'event_id' => $this->data['object']['event_id'],
@@ -454,23 +477,22 @@ class SimpleVK
             'peer_id' => $this->data['object']['peer_id'],
             'event_data' => json_encode([
                 'type' => 'show_snackbar',
-                'text' => $text,
-            ], JSON_THROW_ON_ERROR),
+                'text' => $text
+            ], JSON_THROW_ON_ERROR)
         ]);
     }
 
-    public function eventAnswerEmpty()
-    { //для прекращения спиннера
+    /** Прекращает спиннер нажатия callback-кнопки. */
+    public function eventAnswerEmpty(): void { // для прекращения спиннера
         $this->checkTypeEvent();
         $this->request('messages.sendMessageEventAnswer', [
             'event_id' => $this->data['object']['event_id'],
             'user_id' => $this->data['object']['user_id'],
-            'peer_id' => $this->data['object']['peer_id'],
+            'peer_id' => $this->data['object']['peer_id']
         ]);
     }
 
-    public function eventAnswerOpenLink($link)
-    {
+    public function eventAnswerOpenLink(string $link): void {
         $this->checkTypeEvent();
         $this->request('messages.sendMessageEventAnswer', [
             'event_id' => $this->data['object']['event_id'],
@@ -478,13 +500,12 @@ class SimpleVK
             'peer_id' => $this->data['object']['peer_id'],
             'event_data' => json_encode([
                 'type' => 'open_link',
-                'link' => $link,
-            ], JSON_THROW_ON_ERROR),
+                'link' => $link
+            ], JSON_THROW_ON_ERROR)
         ]);
     }
 
-    public function eventAnswerOpenApp($app_id, $owner_id = null, $hash = null)
-    {
+    public function eventAnswerOpenApp(int|string $app_id, int|string|null $owner_id = null, ?string $hash = null): void {
         $this->checkTypeEvent();
         $this->request('messages.sendMessageEventAnswer', [
             'event_id' => $this->data['object']['event_id'],
@@ -494,111 +515,114 @@ class SimpleVK
                 'type' => 'open_app',
                 'app_id' => $app_id,
                 'owner_id' => $owner_id,
-                'hash' => $hash,
-            ], JSON_THROW_ON_ERROR),
+                'hash' => $hash
+            ], JSON_THROW_ON_ERROR)
         ]);
     }
 
-    public function dateRegistration($id)
-    {
+    /**
+     * Дата регистрации пользователя (через служебный метод VK).
+     */
+    public function dateRegistration(int|string $id): ?string {
         $response = $this->request('restore.disablePageInit', ['user_id' => $id], dont_use_token: true);
-        return isset($response['user']['date_created']) ? date('H:i:s d.m.Y', $response['user']['date_created']) : null;
-
-        //        $site = file_get_contents("https://vk.ru/foaf.php?id={$id}");
-        //        preg_match('<ya:created dc:date="(.*?)">', $site, $data);
-        //        $data = explode('T', $data[1]);
-        //        $date = date("d.m.Y", strtotime($data[0]));
-        //        $time = mb_substr($data[1], 0, 8);
-        //        return "$time $date";
+        return isset($response['user']['date_created'])
+            ? date("H:i:s d.m.Y", $response['user']['date_created'])
+            : null;
     }
 
-    public function buttonLocation($payload = null)
-    {
+    /** Кнопка "местоположение". @return array Конфиг кнопки. */
+    public function buttonLocation($payload = null): array {
         return ['location', $payload, null];
     }
 
-    public function buttonOpenLink($link, $label = 'Открыть', $payload = null)
-    {
+    /** Кнопка "открыть ссылку". @return array Конфиг кнопки. */
+    public function buttonOpenLink(string $link, string $label = 'Открыть', $payload = null): array {
         return ['open_link', $payload, $link, $label];
     }
 
-    public function buttonPayToGroup($group_id, $amount, $description = null, $data = null, $payload = null)
-    {
-        return ['vkpay', $payload, 'pay-to-group', $group_id, $amount, urlencode($description), $data];
+    /** VK Pay кнопка "оплата в группу". @return array Конфиг кнопки. */
+    public function buttonPayToGroup(int $group_id, int $amount, ?string $description = null, $data = null, $payload = null): array {
+        return ['vkpay', $payload, 'pay-to-group', $group_id, $amount, urlencode((string)$description), $data];
     }
 
-    public function buttonPayToUser($user_id, $amount, $description = null, $payload = null)
-    {
-        return ['vkpay', $payload, 'pay-to-user', $user_id, $amount, urlencode($description)];
+    /** VK Pay кнопка "перевод пользователю". @return array Конфиг кнопки. */
+    public function buttonPayToUser(int $user_id, int $amount, ?string $description = null, $payload = null): array {
+        return ['vkpay', $payload, 'pay-to-user', $user_id, $amount, urlencode((string)$description)];
     }
 
-    public function buttonDonateToGroup($group_id, $payload = null)
-    {
+    /** VK Donut кнопка "поддержка группы". @return array Конфиг кнопки. */
+    public function buttonDonateToGroup(int $group_id, $payload = null): array {
         return ['vkpay', $payload, 'transfer-to-group', $group_id];
     }
 
-    public function buttonDonateToUser($user_id, $payload = null)
-    {
+    /** VK Donut кнопка "поддержка пользователя". @return array Конфиг кнопки. */
+    public function buttonDonateToUser(int $user_id, $payload = null): array {
         return ['vkpay', $payload, 'transfer-to-user', $user_id];
     }
 
-    public function buttonApp($text, $app_id, $owner_id = null, $hash = null, $payload = null)
-    {
+    /** Кнопка запуска приложения (VK Mini Apps). @return array Конфиг кнопки. */
+    public function buttonApp(string $text, int $app_id, int|string|null $owner_id = null, ?string $hash = null, $payload = null): array {
         return ['open_app', $payload, $text, $app_id, $owner_id, $hash];
     }
 
-    public function buttonText($text, $color = 'white', $payload = null)
-    {
+    /** Обычная текстовая кнопка. @return array Конфиг кнопки. */
+    public function buttonText(string $text, string $color = 'white', $payload = null): array {
         return ['text', $payload, $text, self::$color_replacer[$color]];
     }
 
-    public function buttonCallback($text, $color = 'white', $payload = null)
-    {
+    /** Callback-кнопка. @return array Конфиг кнопки. */
+    public function buttonCallback(string $text, string $color = 'white', $payload = null): array {
         return ['callback', $payload, $text, self::$color_replacer[$color]];
     }
 
-    static $color_replacer = [
+    /** Замена коротких названий цветов на значения, принимаемые VK API. */
+    public static array $color_replacer = [
         'blue' => 'primary',
         'white' => 'default',
         'red' => 'negative',
-        'green' => 'positive',
+        'green' => 'positive'
     ];
 
-    public function json_online($data = null)
-    {
+    /**
+     * ЗАЛИВАЕТ данные во внешний сервис jsoneditoronline и возвращает ссылку.
+     * ВНИМАНИЕ: данные уходят на сторонний сервер. Не используйте для приватных переписок.
+     */
+    public function json_online($data = null): string {
         if (is_null($data))
             $data = $this->data;
         $json = is_array($data) ? json_encode($data) : $data;
-        $name = time() . random_int(-2_147_483_648, 2_147_483_647);
+        $name = time() . random_int(-2147483648, 2147483647);
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         if ($json) {
-            curl_setopt(
-                $ch,
-                CURLOPT_HTTPHEADER,
-                [
-                    'Content-Type:application/json',
-                ],
-            );
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                "Content-Type:application/json"
+            ]);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['name' => $name, 'data' => $json]));
         }
         curl_setopt($ch, CURLOPT_URL, 'https://jsoneditoronline.herokuapp.com/v1/docs/');
-        $result = json_decode(curl_exec($ch), true);
+        $result = json_decode((string)curl_exec($ch), true);
         unset($ch);
         return 'https://jsoneditoronline.org/?id=' . $result['id'];
     }
 
-    public function userInfo($users_url = null, $fields = null, $name_case = 'nom')
-    {
+    /**
+     * users.get с поддержкой ссылок на страницы вместо id.
+     *
+     * @param mixed $users_url id/ссылка/массив.
+     * @param string|array|null $fields Список полей.
+     * @return mixed Один профиль, массив профилей, error-массив или false.
+     */
+    public function userInfo($users_url = null, $fields = null, string $name_case = 'nom') {
         $users_url = is_array($users_url) ? $users_url : [$users_url];
         $fields = is_array($fields) ? $fields : [$fields];
         $user_ids = array_map([__CLASS__, 'parseUrl'], $users_url);
-        $param_ids = ['user_ids' => implode(',', $user_ids)];
+        $param_ids = ['user_ids' => implode(',', array_map('strval', $user_ids))];
         if ($param_ids['user_ids'] == '') {
             $param_ids = [];
         }
-        $scope = is_array($fields) ? ['fields' => implode(',', $fields)] : [];
+        $scope = ["fields" => implode(",", array_map('strval', $fields))];
         $case = ['name_case' => $name_case];
 
         try {
@@ -612,79 +636,78 @@ class SimpleVK
         }
     }
 
-    public function groupInfo($groups_url = null, $fields = null)
-    {
+    /**
+     * groups.getById с поддержкой ссылок на сообщества вместо id.
+     *
+     * @return mixed Одно сообщество, массив сообществ, error-массив или false.
+     */
+    public function groupInfo($groups_url = null, $fields = null) {
         $groups_url = is_array($groups_url) ? $groups_url : [$groups_url];
         $fields = is_array($fields) ? $fields : [$fields];
         $group_ids = array_map([__CLASS__, 'parseUrl'], $groups_url);
-        $param_ids = ['group_ids' => implode(',', $group_ids)];
+        $param_ids = ['group_ids' => implode(',', array_map('strval', $group_ids))];
         if ($param_ids['group_ids'] == '') {
             $param_ids = [];
         }
-        $fields = ['fields' => implode(',', $fields)];
+        $fields_param = ["fields" => implode(",", array_map('strval', $fields))];
 
         try {
-            $result = $this->request('groups.getById', $param_ids + $fields);
+            $result = $this->request('groups.getById', $param_ids + $fields_param);
             if (isset($result['error'])) {
                 return $result;
             }
-            return count($result) == 1 ? $result['groups'][0] : $result['groups'];
+            return count($result['groups'] ?? []) == 1 ? $result['groups'][0] : ($result['groups'] ?? []);
         } catch (Exception $e) {
             return false;
         }
     }
 
     /**
-     * Ограничить отправку сообщений пользователю/ям в беседе
+     * Ограничить отправку сообщений пользователю/ям в беседе.
+     *
      * @param int $seconds количество секунд мута или 0 для бесконечного
      * @param array|int $user_ids По умолчанию user_id из события
      * @param int|null $peer_id По умолчанию peer_id из события
      * @return array|null
      */
-    public function setMute(int $seconds = 0, array|int $user_ids = [], ?int $peer_id = null): ?array
-    {
+    public function setMute(int $seconds = 0, array|int $user_ids = [], ?int $peer_id = null): ?array {
         $this->initPeerID($from_peer_id)->initUserID($from_user_id);
 
         if ($seconds < 0) {
-            trigger_error('Количество секунд мута должно быть больше или равно 0.', E_USER_WARNING);
+            trigger_error(
+                "Количество секунд мута должно быть больше или равно 0.",
+                E_USER_WARNING
+            );
 
             return null;
         }
 
         if (!$from_peer_id && !$from_user_id && !$peer_id && !$user_ids) {
-            trigger_error(
-                'Попытка вызова setMute без параметров, при отсутствии в событии от ВК peer_id и user_id.',
-                E_USER_WARNING,
-            );
+            trigger_error("Попытка вызова setMute без параметров, при отсутствии в событии от ВК peer_id и user_id.", E_USER_WARNING);
             return null;
         }
 
-        $for = $seconds == 0 ? [] : ['for' => $seconds];
+        $for = ($seconds == 0) ? [] : ['for' => $seconds];
         $user_ids = is_array($user_ids) ? $user_ids : [$user_ids];
         $member_ids = empty($user_ids) ? ['member_ids' => $from_user_id] : ['member_ids' => implode(',', $user_ids)];
         $peer_id_param = $peer_id ? ['peer_id' => $peer_id] : ['peer_id' => $from_peer_id];
 
-        return $this->request('messages.changeConversationMemberRestrictions', ['action' => 'ro']
-        + $peer_id_param
-        + $for
-        + $member_ids);
+        return $this->request('messages.changeConversationMemberRestrictions',
+            ['action' => 'ro'] + $peer_id_param + $for + $member_ids);
     }
 
     /**
-     * Снять ограничия отправки сообщений пользователю/ям в беседе
+     * Снять ограничение отправки сообщений пользователю/ям в беседе.
+     *
      * @param array|int $user_ids По умолчанию user_id из события
      * @param int|null $peer_id По умолчанию peer_id из события
      * @return array|null
      */
-    public function unsetMute(array|int $user_ids = [], ?int $peer_id = null): ?array
-    {
+    public function unsetMute(array|int $user_ids = [], ?int $peer_id = null): ?array {
         $this->initPeerID($from_peer_id)->initUserID($from_user_id);
 
         if (!$from_peer_id && !$from_user_id && !$peer_id && !$user_ids) {
-            trigger_error(
-                'Попытка вызова unsetMute без параметров, при отсутствии в событии от ВК peer_id и user_id.',
-                E_USER_WARNING,
-            );
+            trigger_error("Попытка вызова unsetMute без параметров, при отсутствии в событии от ВК peer_id и user_id.", E_USER_WARNING);
             return null;
         }
 
@@ -692,24 +715,20 @@ class SimpleVK
         $member_ids = empty($user_ids) ? ['member_ids' => $from_user_id] : ['member_ids' => implode(',', $user_ids)];
         $peer_id_param = $peer_id ? ['peer_id' => $peer_id] : ['peer_id' => $from_peer_id];
 
-        return $this->request('messages.changeConversationMemberRestrictions', ['action' => 'rw']
-        + $peer_id_param
-        + $member_ids);
+        return $this->request('messages.changeConversationMemberRestrictions',
+            ['action' => 'rw'] + $peer_id_param + $member_ids);
     }
 
-    public function getAllDialogs($extended = 0, $filter = 'all', $fields = null)
-    {
+    /**
+     * Генератор по всем диалогам (постранично, с дедупликацией по last_message id).
+     */
+    public function getAllDialogs(int $extended = 0, string $filter = 'all', $fields = null): \Generator {
         for ($count_all = 0, $offset = 0, $last_id = []; $offset <= $count_all; $offset += 199) {
-            $members = $this->request(
-                'messages.getConversations',
-                $last_id
-                + [
+            $members = $this->request('messages.getConversations', $last_id + [
                     'count' => 200,
                     'filter' => $filter,
                     'extended' => $extended,
-                    'fields' => is_array($fields) ? implode(',', $fields) : '',
-                ],
-            );
+                    'fields' => (is_array($fields) ? join(',', $fields) : '')]);
             if ($count_all == 0)
                 $count_all = $members['count'];
             if (empty($members['items']))
@@ -724,32 +743,27 @@ class SimpleVK
         }
     }
 
-    public function getAllComments($owner_id_or_url, $post_id = null, $sort = 'asc', $extended = 0, $fields = null)
-    {
+    /**
+     * Генератор по комментариям записи (принимает owner_id/post_id или ссылку на пост).
+     */
+    public function getAllComments(int|string $owner_id_or_url, ?int $post_id = null, string $sort = 'asc', int $extended = 0, $fields = null): \Generator {
+        $owner_id = $owner_id_or_url;
         if (!is_numeric($owner_id_or_url) && is_null($post_id)) {
-            if (preg_match("!(-?\d+)_(\d+)!", $owner_id_or_url, $matches)) {
-                $owner_id = $matches[1];
-                $post_id = $matches[2];
+            if (preg_match("!(-?\d+)_(\d+)!", (string)$owner_id_or_url, $matches)) {
+                $owner_id = (int)$matches[1];
+                $post_id = (int)$matches[2];
             } else {
-                throw new SimpleVkException(
-                    0,
-                    'Передайте 2 параметра (id пользователя, id поста), или корректную ссылку на пост',
-                );
+                throw new SimpleVkException(0, "Передайте 2 параметра (id пользователя, id поста), или корректную ссылку на пост");
             }
         }
         for ($count_all = 0, $offset = 0, $last_id = []; $offset <= $count_all; $offset += 99) {
-            $members = $this->request(
-                'wall.getComments',
-                $last_id
-                + [
+            $members = $this->request('wall.getComments', $last_id + [
                     'count' => 100,
                     'owner_id' => $owner_id,
                     'post_id' => $post_id,
                     'extended' => $extended,
                     'sort' => $sort,
-                    'fields' => is_array($fields) ? implode(',', $fields) : '',
-                ],
-            );
+                    'fields' => (is_array($fields) ? join(',', $fields) : '')]);
             if ($count_all == 0)
                 $count_all = $members['count'];
             if (empty($members['items']))
@@ -764,54 +778,47 @@ class SimpleVK
         }
     }
 
-    public function getAllMembers($group_id = null, $sort = null, $filter = null, $fields = null)
-    {
+    /**
+     * Генератор по подписчикам сообщества.
+     */
+    public function getAllMembers(int|string|null $group_id = null, ?string $sort = null, ?string $filter = null, $fields = null): \Generator {
         if (is_null($group_id))
             $group_id = $this->groupInfo()['id'];
-        return $this->generatorRequest(
-            'groups.getMembers',
-            [
-                'fields' => is_array($fields) ? implode(',', $fields) : '',
-                'group_id' => $group_id,
-            ]
+        return $this->generatorRequest('groups.getMembers', [
+                'fields' => (is_array($fields) ? join(',', $fields) : ''),
+                'group_id' => $group_id]
             + ($filter ? ['filter' => $filter] : [])
-            + ($sort ? ['sort' => $sort] : []),
-            1000,
-        );
+            + ($sort ? ['sort' => $sort] : []), 1000);
     }
 
-    public function getAllGroupsFromUser($user_id = null, $extended = 0, $filter = null, $fields = null)
-    {
-        $extended = !is_null($fields) || $extended;
-        return $this->generatorRequest(
-            'groups.get',
-            [
-                'extended' => $extended,
-            ]
+    /**
+     * Генератор по группам пользователя.
+     */
+    public function getAllGroupsFromUser(?int $user_id = null, int $extended = 0, ?string $filter = null, $fields = null): \Generator {
+        $extended = (!is_null($fields) || $extended) ? 1 : 0;
+        return $this->generatorRequest('groups.get', [
+                'extended' => $extended]
             + ($filter ? ['filter' => $filter] : [])
-            + ($fields ? ['fields' => $fields] : [])
-            + ($user_id ? ['user_id' => $user_id] : []),
-            1000,
-        );
+            + ($fields ? ['fields' => (is_array($fields) ? join(',', $fields) : $fields)] : [])
+            + ($user_id ? ['user_id' => $user_id] : []), 1000);
     }
 
-    public function getAllWalls($id = null, $extended = 0, $filter = null, $fields = null)
-    {
-        $extended = !is_null($fields) || $extended;
-        return $this->generatorRequest(
-            'wall.get',
-            [
-                'extended' => $extended,
-            ]
+    /**
+     * Генератор по записям на стене.
+     */
+    public function getAllWalls(int|string|null $id = null, int $extended = 0, ?string $filter = null, $fields = null): \Generator {
+        $extended = (!is_null($fields) || $extended) ? 1 : 0;
+        return $this->generatorRequest('wall.get', [
+                'extended' => $extended]
             + ($filter ? ['filter' => $filter] : [])
-            + ($fields ? ['fields' => $fields] : [])
-            + ($id ? ['owner_id' => $id] : []),
-            100,
-        );
+            + ($fields ? ['fields' => (is_array($fields) ? join(',', $fields) : $fields)] : [])
+            + ($id ? ['owner_id' => $id] : []), 100);
     }
 
-    public function generatorRequest($method, $params, $count = 200)
-    {
+    /**
+     * Универсальный генератор постраничных запросов с items/count.
+     */
+    public function generatorRequest(string $method, array $params, int $count = 200): \Generator {
         for ($count_all = 0, $offset = 0; $offset <= $count_all; $offset += $count) {
             $result = $this->request($method, $params + ['offset' => $offset, 'count' => $count]);
             if ($count_all == 0) {
@@ -828,14 +835,15 @@ class SimpleVK
         }
     }
 
-    public function group($id = null)
-    {
+    /**
+     * Задаёт group_id, автоматически добавляемый ко всем запросам.
+     */
+    public function group(?int $id): static {
         $this->group_id = $id;
         return $this;
     }
 
-    private function convertMessageToHtmlEntities($message)
-    {
+    private function convertMessageToHtmlEntities(string $message): string {
         if (self::$ffi !== null) {
             $result = self::$ffi->convert_to_html_entities($message);
             $message_with_html_entities = \FFI::string($result);
@@ -850,10 +858,9 @@ class SimpleVK
      * Обрабатывает только эмодзи и символы за пределами BMP (U+10000 и выше).
      * Специальные HTML-символы (например, <, >, &) обрабатываются как обычно.
      */
-    protected function convertToHtmlEntities($string)
-    {
+    protected function convertToHtmlEntities(string $string): string {
         if (empty($string)) {
-            return '';
+            return "";
         }
 
         // Шаг 1: Экранируем базовые HTML-символы. Это обязательно и должно идти первым.
@@ -862,10 +869,8 @@ class SimpleVK
         // Шаг 2: Определяем карту преобразования только для символов за пределами BMP (U+10000 и выше).
         // Это как раз диапазон, где находятся почти все эмодзи.
         $convmap = [
-            0x1_0000,
-            0x10_FFFF, // Диапазон кодовых точек (от U+10000 до U+10FFFF)
-            0,
-            0xF_FFFF, // Смещение и маска (стандартные значения для преобразования в сущности)
+            0x10000, 0x10FFFF,  // Диапазон кодовых точек (от U+10000 до U+10FFFF)
+            0, 0xFFFFF         // Смещение и маска (стандартные значения для преобразования в сущности)
         ];
 
         // Шаг 3: Преобразуем только указанный диапазон.
@@ -878,20 +883,13 @@ class SimpleVK
      * гарантируя целостность сущностей и учитывая разрывы строк и разрывы слов
      * в пределах последних символов части.
      *
-     * @param string $encodedHtml      Исходная строка, содержащая HTML-сущности, которую нужно разделить.
-     * @param int $maxLength        Максимальная длина каждой части. По умолчанию 4096 символов.
-     * @param int $tailSearchLimit  Количество символов в конце части, в пределах которых
-     *                                 будет производиться поиск разрывов (например, \n или < br>).
-     * @param int $spaceSearchLimit Количество символов в конце части, в пределах которых
-     *                                 будет производиться поиск пробелов для разделения в случае разрыва.
-     *
      * @return string[] Массив строк, каждая из которых является частью исходного текста.
      */
     protected function splitLongMessages(
         string $encodedHtml,
         int $maxLength = 4096,
         int $tailSearchLimit = 150,
-        int $spaceSearchLimit = 25,
+        int $spaceSearchLimit = 25
     ): array {
         $text_len = mb_strlen($encodedHtml, 'UTF-8');
         $parts = [];
@@ -899,7 +897,7 @@ class SimpleVK
 
         while ($start < $text_len) {
             $currentPart = mb_substr($encodedHtml, $start, $maxLength, 'UTF-8');
-            $isSplitByMaxLength = mb_strlen($currentPart, 'UTF-8') === $maxLength;
+            $isSplitByMaxLength = (mb_strlen($currentPart, 'UTF-8') === $maxLength);
 
             // Проверяем только последние 9 символов текущей части
             $lastChunk = mb_substr($currentPart, -9, null, 'UTF-8');
@@ -925,13 +923,9 @@ class SimpleVK
 
                 if ($brEntityPos !== false || $newlineEntityPos !== false) {
                     // Если найден перенос, обрезаем строку до его конца
-                    $splitPos = $brEntityPos !== false
-                        ? mb_strlen($currentPart, 'UTF-8') - $tailSearchLimit
-                        + $brEntityPos
-                        + mb_strlen('&lt;br&gt;', 'UTF-8')
-                        : mb_strlen($currentPart, 'UTF-8') - $tailSearchLimit
-                        + $newlineEntityPos
-                        + mb_strlen("\n", 'UTF-8');
+                    $splitPos = ($brEntityPos !== false)
+                        ? mb_strlen($currentPart, 'UTF-8') - $tailSearchLimit + $brEntityPos + mb_strlen('&lt;br&gt;', 'UTF-8')
+                        : mb_strlen($currentPart, 'UTF-8') - $tailSearchLimit + $newlineEntityPos + mb_strlen("\n", 'UTF-8');
                     $currentPart = mb_substr($currentPart, 0, $splitPos, 'UTF-8');
                 } else {
                     // Если перенос строки не найден, ищем пробел в последних $spaceSearchLimit символах
@@ -955,17 +949,24 @@ class SimpleVK
         return array_map(static fn($part) => html_entity_decode($part, ENT_QUOTES, 'UTF-8'), $parts);
     }
 
-    public function request(
-        $method,
-        $params = [],
-        $use_placeholders = true,
-        #[\SensitiveParameter]
-        $dont_use_token = false,
-    ) {
+    /**
+     * Универсальный запрос к VK API.
+     *
+     * Для messages.send автоматически применяет плейсхолдеры (~теги упоминаний)
+     * и разбивает длинные сообщения на части <= 4096 символов.
+     *
+     * @param string $method Имя метода (например messages.send).
+     * @param array $params Параметры метода.
+     * @param bool $use_placeholders Применять ли плейсхолдеры упоминаний.
+     * @param bool $dont_use_token Не подставлять access_token (для публичных методов).
+     * @return mixed Содержимое response.
+     * @throws SimpleVkException
+     */
+    public function request(string $method, array $params = [], bool $use_placeholders = true, bool $dont_use_token = false) {
         $time_start = microtime(true);
 
-        if (isset($params['peer_id']) && is_array($params['peer_id'])) { //возможно везде заменить на peer_ids в методах
-            $params['peer_ids'] = implode(',', $params['peer_id']);
+        if (isset($params['peer_id']) && is_array($params['peer_id'])) { // возможно везде заменить на peer_ids в методах
+            $params['peer_ids'] = join(',', $params['peer_id']);
             unset($params['peer_id']);
         }
 
@@ -974,23 +975,23 @@ class SimpleVK
         }
         $params['v'] = $this->version;
         if (!is_null($this->group_id) && empty($params['group_id'])) {
-            $params['group_id'] = $this->group_id; //а надо ли
+            $params['group_id'] = $this->group_id;
         }
         $url = $this->api_url . $method;
 
         $result = null;
 
-        if (isset($params['message']) && $method === 'messages.send') { //edit нет смысла, просто 2 раза обновится сообщение
+        if (isset($params['message']) && $method === 'messages.send') { // edit нет смысла, просто 2 раза обновится сообщение
             if ($use_placeholders) {
                 $params['message'] = $this->placeholders($params['message'], $params['peer_id'] ?? null);
             }
 
-            //точно влезет в лимит 4096, потому что 9 символов в html-сущности максимум
-            //поэтому конвертацию не делаем
-            if (mb_strlen($params['message']) <= 455) {
+            // точно влезет в лимит 4096, потому что 9 символов в html-сущности максимум,
+            // поэтому конвертацию не делаем
+            if (mb_strlen((string)$params['message']) <= 455) {
                 $messages = [$params['message']];
             } else {
-                $message_with_html_entities = $this->convertMessageToHtmlEntities($params['message']);
+                $message_with_html_entities = $this->convertMessageToHtmlEntities((string)$params['message']);
                 $messages = $this->splitLongMessages($message_with_html_entities);
             }
 
@@ -1002,12 +1003,17 @@ class SimpleVK
             $result = $this->runRequestWithAttempts($url, $params, $method);
         }
 
-        $this->time_checker += microtime(true) - $time_start;
+        $this->time_checker = ($this->time_checker ?? 0) + (microtime(true) - $time_start);
         return $result;
     }
 
-    public function placeholders($message, $current_vk_id = null)
-    {
+    /**
+     * Заменяет плейсхолдеры ~fn|id~, ~ln|id~, ~full|id~ (и варианты с '!') на упоминания.
+     *
+     * @param mixed $message
+     * @return mixed
+     */
+    public function placeholders($message, $current_vk_id = null) {
         if (!$current_vk_id) {
             $this->initUserID($current_vk_id);
         }
@@ -1021,18 +1027,18 @@ class SimpleVK
         $tags = ['!fn', '!ln', '!full', 'fn', 'ln', 'full'];
 
         // Шаблон для поиска всех вхождений вида ~тег|id~
-        if (preg_match_all('|~(.*?)~|', $message, $matches)) {
+        if (preg_match_all("|~(.*?)~|", $message, $matches)) {
             foreach ($matches[1] as $match) {
                 $ex1 = explode('|', $match);
                 $tag = $ex1[0];
                 $vk_id = $ex1[1] ?? $current_vk_id;
 
                 // Если это один из тегов, то добавляем в соответствующий массив
-                if (in_array($tag, $tags, strict: true)) {
+                if (in_array($tag, $tags, true)) {
                     if ($vk_id > 0) {
                         $user_ids[] = $vk_id;
                     } elseif ($vk_id < 0) {
-                        $group_ids[] = substr($vk_id, 1); // Убираем '-' перед group_id
+                        $group_ids[] = substr((string)$vk_id, 1); // Убираем '-' перед group_id
                     }
                 }
             }
@@ -1043,44 +1049,37 @@ class SimpleVK
 
         if (!empty($user_ids)) {
             $user_infos = $this->request('users.get', ['user_ids' => implode(',', $user_ids)]);
-            foreach ($user_infos as $user_info) {
+            foreach ((array)$user_infos as $user_info) {
                 $user_cache[$user_info['id']] = $user_info;
             }
         }
 
         if (!empty($group_ids)) {
             $group_infos = $this->request('groups.getById', ['group_ids' => implode(',', $group_ids)])['groups'] ?? [];
-            foreach ($group_infos as $group_info) {
+            foreach ((array)$group_infos as $group_info) {
                 $group_cache[$group_info['id']] = $group_info;
             }
         }
 
         // Замена тегов в тексте
         return preg_replace_callback(
-            '|~(.*?)~|',
+            "|~(.*?)~|",
             static function ($matches) use ($user_cache, $group_cache, $current_vk_id, $tags) {
                 $ex1 = explode('|', $matches[1]);
                 $tag = $ex1[0];
                 $vk_id = $ex1[1] ?? $current_vk_id;
 
-                if ($vk_id && in_array($tag, $tags, strict: true)) {
+                if ($vk_id && in_array($tag, $tags, true)) {
                     if ($vk_id > 0 && isset($user_cache[$vk_id])) {
                         $data = $user_cache[$vk_id];
                         $f = $data['first_name'];
                         $l = $data['last_name'];
-                        $replace = [
-                            "@id{$vk_id}({$f})",
-                            "@id{$vk_id}({$l})",
-                            "@id{$vk_id}({$f} {$l})",
-                            $f,
-                            $l,
-                            "{$f} {$l}",
-                        ];
+                        $replace = ["@id{$vk_id}($f)", "@id{$vk_id}($l)", "@id{$vk_id}($f $l)", $f, $l, "$f $l"];
                         return str_replace($tags, $replace, $tag);
                     }
 
                     if ($vk_id < 0) {
-                        $group_id = substr($vk_id, 1);
+                        $group_id = substr((string)$vk_id, 1);
                         if (isset($group_cache[$group_id])) {
                             $group_name = $group_cache[$group_id]['name'];
                             return "@club{$group_id}({$group_name})";
@@ -1090,38 +1089,49 @@ class SimpleVK
 
                 return $matches[0];
             },
-            $message,
+            $message
         );
     }
 
-    protected function getPayload()
-    {
+    /**
+     * Возвращает payload события, автоматически раскодируя JSON-строку.
+     *
+     * @return mixed
+     */
+    protected function getPayload() {
         if (isset($this->data['object']['payload'])) {
             if (is_string($this->data['object']['payload'])) {
                 $payload = json_decode($this->data['object']['payload'], true) ?? $this->data['object']['payload'];
-            } else
+            } else {
                 $payload = $this->data['object']['payload'];
-        } else
+            }
+        } else {
             $payload = null;
+        }
         return $payload;
     }
 
-    protected function checkTypeEvent()
-    {
-        if ($this->data['type'] != 'message_event')
-            throw new SimpleVkException(0, 'eventAnswerSnackbar можно использовать только при событии message_event');
+    /**
+     * @throws SimpleVkException если событие не message_event
+     */
+    protected function checkTypeEvent(): void {
+        if (($this->data['type'] ?? null) != 'message_event')
+            throw new SimpleVkException(0, "eventAnswer* можно использовать только при событии message_event");
     }
 
-    protected static function parseUrl($url)
-    {
+    /**
+     * Вырезает домен/схему из ссылки на страницу VK, оставляя короткое имя или id.
+     *
+     * @return string|false
+     */
+    protected static function parseUrl($url): string|false {
         if ($url) {
-            $url = preg_replace('!.*?/!', '', $url);
+            $url = preg_replace("!.*?/!", '', (string)$url);
         }
-        return $url === '' ? false : $url;
+        return ($url === '' || $url === null) ? false : $url;
     }
 
-    protected function setupBackgroundProcessing()
-    {
+    protected function setupBackgroundProcessing(): void {
         error_reporting(E_ALL);
         // ОТКЛЮЧАЕМ вывод ошибок в браузер/stdout.
         ini_set('display_errors', '0');
@@ -1178,7 +1188,6 @@ class SimpleVK
         }
 
         // Гарантированно уничтожает ВСЕ буферы вывода, которые могли быть запущены ранее
-        // Это гарантирует, что перед отправкой нашего ответа вывод абсолютно чист.
         while (ob_get_level() > 0) {
             @ob_end_clean();
         }
@@ -1193,8 +1202,8 @@ class SimpleVK
 
         // Специальные заголовки для управления прокси-серверами
         header('Content-Type: text/plain; charset=utf-8');
-        header('X-Accel-Buffering: no'); // Команда для Nginx не буферизировать ответ.
-        header('X-Accel-Expires: 0'); // Команда для Nginx не кешировать ответ.
+        header('X-Accel-Buffering: no');   // Команда для Nginx не буферизировать ответ.
+        header('X-Accel-Expires: 0');      // Команда для Nginx не кешировать ответ.
 
         // Стандартные заголовки для запрета кеширования на всех уровнях (браузер, прокси).
         header('Cache-Control: no-store, no-cache, must-revalidate, no-transform');
@@ -1226,19 +1235,18 @@ class SimpleVK
         return $finished;
     }
 
-    protected function processAuth(#[\SensitiveParameter] $token, $version, $also_version)
-    {
-        if ($token instanceof auth) {
+    protected function processAuth($token, $version, $also_version): void {
+        if ($token instanceof Auth) {
             $this->auth = $token;
-            $this->version = $version;
+            $this->version = (string)$version;
             $this->token = $this->auth->getAccessToken();
-        } else if (isset($also_version)) { //авторизация через аккаунт
+        } else if (isset($also_version)) { // авторизация через аккаунт
             $this->auth = new Auth($token, $version);
             $this->token = $this->auth->getAccessToken();
-            $this->version = $also_version;
-        } else { //авторизация через токен
-            $this->token = $token;
-            $this->version = $version;
+            $this->version = (string)$also_version;
+        } else { // авторизация через токен
+            $this->token = (string)$token;
+            $this->version = (string)$version;
         }
     }
 }
