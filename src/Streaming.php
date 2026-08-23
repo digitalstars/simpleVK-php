@@ -1,20 +1,22 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DigitalStars\SimpleVK;
 
-class Streaming
-{
+
+
+/**
+ * Клиент Streaming API VK: правила потока и чтение событий через websocket-сокет.
+ */
+class Streaming {
     private string $rules_url;
     private string $stream_url;
     private string $token;
     private string $version;
+    /** @var resource */
     private $socket;
     private string $stream_query;
 
-    public function __construct(#[\SensitiveParameter] string $token, string $version)
-    {
+    public function __construct(string $token, string $version) {
         if (!function_exists('curl_init')) {
             exit('Для работы streaming небоходим curl. Прекращение работы');
         }
@@ -25,81 +27,89 @@ class Streaming
         $this->connect();
     }
 
-    private function getStreamingServer(): void
-    {
-        $response = $this->request(
-            "https://api.vk.com/method/streaming.getServerUrl?v={$this->version}&access_token={$this->token}",
-            'GET',
-        )['response'];
-        $this->rules_url = "https://{$response['endpoint']}/rules?key={$response['key']}";
-        $this->stream_url = "ssl://{$response['endpoint']}:443";
-        $this->stream_query = "/stream?key={$response['key']}";
+    private function getStreamingServer(): void {
+        $response = $this->request("https://api.vk.com/method/streaming.getServerUrl?v={$this->version}&access_token={$this->token}", 'GET')['response'];
+        $this->rules_url = "https://$response[endpoint]/rules?key=$response[key]";
+        $this->stream_url = "ssl://$response[endpoint]:443";
+        $this->stream_query = "/stream?key=$response[key]";
     }
 
-    public function getRules(): array
-    {
+    /**
+     * @return array<array> Текущий список правил потока.
+     */
+    public function getRules(): array {
         return $this->request($this->rules_url, 'GET')['rules'];
     }
 
-    public function addRule(string $value, string $tag): array
-    {
+    /** Добавляет правило фильтрации потока. @return array Ответ API. */
+    public function addRule(string $value, string $tag): array {
         $json = ['rule' => ['value' => $value, 'tag' => $tag]];
         return $this->request($this->rules_url, 'POST', $json);
     }
 
-    public function deleteRule(string $tag): array
-    {
+    /** Удаляет правило по тегу. @return array Ответ API. */
+    public function deleteRule(string $tag): array {
         $json = ['tag' => $tag];
         return $this->request($this->rules_url, 'DELETE', $json);
     }
 
-    public function deleteAllRules(): bool
-    {
+    /** Удаляет все правила потока. */
+    public function deleteAllRules(): true {
         foreach ($this->getRules() as $rule) {
             $this->deleteRule($rule['tag']);
         }
         return true;
     }
 
-    public function listen(callable $callback): void
-    {
+    /**
+     * Бесконечный цикл чтения событий потока.
+     *
+     * @param callable $callback fn(array $event): void — декодированное событие
+     *        с обработанным полем text.
+     */
+    public function listen(callable $callback): void {
         while (true) {
             $data = $this->readBytes(2);
+            if ($data === '') {
+                continue; // соединение закрылось/нет данных — не крутим CPU
+            }
             $opcode = ord($data[0]) & 31;
             if ($opcode === 9) { // ping
                 $this->pong();
             } else {
                 $event_data = $this->getPayload();
                 $event_data = json_decode($event_data, true, 512, JSON_THROW_ON_ERROR);
-                $event_data['event']['text'] = $this->processData($event_data['event']['text']);
-                $callback($data);
+                $event_data['event']['text'] = $this->processData((string)$event_data['event']['text']);
+                // Фикс: раньше в колбэк уходили 2 байта заголовка кадра вместо события
+                $callback($event_data);
             }
         }
     }
 
-    private function processData(string $data): string
-    {
+    private function processData(string $data): string {
         $data = str_replace("\u003cbr\u003e", "\n", $data);
         return html_entity_decode($data, ENT_QUOTES, 'UTF-8');
     }
 
-    private function readBytes(int $length): string
-    {
+    private function readBytes(int $length): string {
         $data = '';
         while (strlen($data) < $length) {
-            $data .= fread($this->socket, $length - strlen($data));
+            $chunk = fread($this->socket, $length - strlen($data));
+            if ($chunk === false || $chunk === '') {
+                return $data;
+            }
+            $data .= $chunk;
         }
         return $data;
     }
 
-    private function pong()
-    {
+    /** Отвечает pong-кадром на ping сервера. */
+    private function pong(): void {
         $payload = 'PONG';
         $payload_length = strlen($payload);
 
         // Формируем заголовок кадра (2 байта)
-        // 138 . payloadLength + 128
-        $frame_head = chr(0b1000_1010) . chr($payload_length | 0b1000_0000);
+        $frame_head = chr(0b10001010) . chr($payload_length | 0b10000000);
 
         $mask = random_bytes(4);
         $frame_head .= $mask;
@@ -110,29 +120,34 @@ class Streaming
             $masked_payload .= $payload[$i] ^ $mask[$i % 4];
         }
 
-        $frame = $frame_head . $masked_payload;
-
-        fwrite($this->socket, $frame);
+        fwrite($this->socket, $frame_head . $masked_payload);
     }
 
-    private function getPayload()
-    {
+    /**
+     * Читает payload текущего кадра.
+     *
+     * ИСТОРИЧЕСКОЕ ПОВЕДЕНИЕ СОХРАНЕНО: длина берётся из следующих 2 байт
+     * (extended-length формат). Кадры VK Streaming укладываются в этот формат.
+     */
+    private function getPayload(): string {
         $data = $this->readBytes(2);
-        $payload_length = bindec(implode('', array_map(static fn($char) => sprintf(
-            '%08b',
-            ord($char),
-        ), str_split($data))));
+        $payload_length = bindec(implode('', array_map(
+            static fn($char) => sprintf('%08b', ord($char)),
+            str_split($data)
+        )));
 
         return $this->readBytes($payload_length);
     }
 
-    private function request($url, $type, $json = [])
-    {
+    private function request(string $url, string $type, array $json = []) {
         return $this->request_core($url, $type, $json);
     }
 
-    private function request_core($url, $type, $json)
-    {
+    /**
+     * @return mixed Раскодированный ответ Streaming API.
+     * @throws SimpleVkException Пустой ответ или код 400.
+     */
+    private function request_core(string $url, string $type, array $json) {
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_CUSTOMREQUEST => $type,
@@ -144,54 +159,49 @@ class Streaming
 
         if (!empty($json)) {
             curl_setopt_array($ch, [
-                CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                CURLOPT_HTTPHEADER => ["Content-Type: application/json"],
                 CURLOPT_POSTFIELDS => json_encode($json),
             ]);
         }
 
-        $result = json_decode(curl_exec($ch), true, 512, JSON_THROW_ON_ERROR);
-        unset($ch);
+        try {
+            $result = json_decode((string)curl_exec($ch), true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable $e) {
+            throw new SimpleVkException(77777, 'Вк вернул пустой или невалидный ответ');
+        } finally {
+            unset($ch);
+        }
 
         if (empty($result)) {
-            throw new SimpleVkException(77_777, 'Вк вернул пустой ответ');
+            throw new SimpleVkException(77777, 'Вк вернул пустой ответ');
         }
-        if ($result['code'] == 400) {
-            throw new SimpleVkException($result['code'], json_encode(
-                $result,
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-            ));
+        if (($result['code'] ?? null) == 400) {
+            throw new SimpleVkException((int)$result['code'], json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         }
 
         return $result;
     }
 
-    private function connect()
-    {
+    private function connect(): void {
         $context = stream_context_create();
-        $this->socket = @stream_socket_client(
-            $this->stream_url,
-            $errno,
-            $errstr,
-            1000,
-            STREAM_CLIENT_CONNECT,
-            $context,
-        );
+        $this->socket = @stream_socket_client($this->stream_url, $errno, $errstr, 1000, STREAM_CLIENT_CONNECT, $context);
+        if (!$this->socket) {
+            throw new SimpleVkException(77781, "Не удалось подключиться к Streaming API: $errstr ($errno)");
+        }
         $key = $this->generateWebSocketKey();
-        $header =
-            "GET {$this->stream_query} HTTP/1.1\r\n"
-            . "Host: streaming.vk.com:443\r\n"
-            . "User-Agent: websocket-client-php\r\n"
-            . "Connection: Upgrade\r\n"
-            . "Upgrade: websocket\r\n"
-            . "Sec-WebSocket-Key: {$key}\r\n"
-            . "Sec-WebSocket-Version: 13\r\n\r\n";
+        $header = "GET {$this->stream_query} HTTP/1.1\r\n" .
+            "Host: streaming.vk.com:443\r\n" .
+            "User-Agent: websocket-client-php\r\n" .
+            "Connection: Upgrade\r\n" .
+            "Upgrade: websocket\r\n" .
+            "Sec-WebSocket-Key: $key\r\n" .
+            "Sec-WebSocket-Version: 13\r\n\r\n";
 
         fwrite($this->socket, $header);
         stream_get_line($this->socket, 1024, "\r\n\r\n");
     }
 
-    private function generateWebSocketKey()
-    {
+    private function generateWebSocketKey(): string {
         return base64_encode(random_bytes(16));
     }
 }

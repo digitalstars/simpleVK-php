@@ -1,18 +1,23 @@
 <?php
 
-declare(strict_types=1);
-
 namespace DigitalStars\SimpleVK;
 
-class Post extends BaseConstructor
-{
-    public static function create($vk = null, &$cfg = null)
-    {
+/**
+ * Конструктор и отправитель записей на стене (wall.post).
+ */
+class Post extends BaseConstructor {
+    /** @param array|null $cfg */
+    public static function create($vk = null, &$cfg = null): static {
         return new self($vk, $cfg);
     }
 
-    public function load($cfg = [])
-    {
+    /**
+     * Загружает конфиг из другого Post или массива.
+     *
+     * @param Post|array $cfg
+     * @return static
+     */
+    public function load($cfg = []): static {
         if ($cfg instanceof Post) {
             $this->vk = $cfg->vk;
             $this->config = $cfg->config;
@@ -21,8 +26,14 @@ class Post extends BaseConstructor
         return $this;
     }
 
-    public function send($id = null, $publish_date = null, $vk = null)
-    {
+    /**
+     * Публикует запись на стене.
+     *
+     * @param int|string|null $id owner_id (по умолчанию id текущего пользователя).
+     * @param int|null $publish_date Timestamp отложенной публикации (только в будущем).
+     * @return mixed Результат wall.post.
+     */
+    public function send($id = null, ?int $publish_date = null, $vk = null) {
         $params = [];
         if (!is_null($publish_date)) {
             if ($publish_date >= time())
@@ -31,21 +42,21 @@ class Post extends BaseConstructor
                 throw new SimpleVkException(0, 'Неверно указан $publish_date');
         }
 
-        if (isset($this->config['real_id']) and $this->config['real_id'] != 0)
+        if (!empty($this->config['real_id']))
             $id = $this->config['real_id'];
 
         if (empty($this->vk) and isset($vk))
             $this->vk = $vk;
         if (empty($this->vk))
-            throw new SimpleVkException(0, 'Экземпляр SimpleVK не передан');
+            throw new SimpleVkException(0, "Экземпляр SimpleVK не передан");
         if (empty($id)) {
             $id = $this->vk->userInfo()['id'];
         }
         $this->config_cache = $this->config;
-        if ($this->preProcessing(null)) //вернет true, если замыкание события вернуло true (наверно остановка какая-то?)
+        if ($this->preProcessing(null)) // вернет true, если замыкание события прервало выполнение
             return null;
 
-        if (isset($this->config['real_id']) and $this->config['real_id'] != 0)
+        if (!empty($this->config['real_id']))
             $id = $this->config['real_id'];
 
         $attachments = [];
@@ -61,7 +72,7 @@ class Post extends BaseConstructor
             $attachments = array_merge($attachments, $this->config['params']['attachment']);
             unset($this->config['params']['attachment']);
         }
-        $attachments = !empty($attachments) ? ['attachment' => implode(',', $attachments)] : [];
+        $attachments = !empty($attachments) ? ['attachment' => join(",", $attachments)] : [];
 
         if (isset($this->config['params']))
             $params += $this->config['params'];
