@@ -29,9 +29,11 @@ final class ClientConfig
         public readonly int $groupId,
         public readonly string $apiVersion = '5.199',
         public readonly string $apiUrl = 'https://api.vk.com/method/',
-        /** Секрет для подтверждения серверов Callback API. */
+        /** Секрет для проверки Callback API (X-Retry-Secret). */
         #[SensitiveParameter]
         public readonly ?string $confirmationSecret = null,
+        /** Код подтверждения, возвращаемый в ответ на type=confirmation. */
+        public readonly ?string $confirmationCode = null,
         public readonly int $retryMaxAttempts = 3,
         public readonly int $retryBackoffMs = 500,
         /** Максимум запросов к API в секунду; null — без ограничения. */
@@ -79,7 +81,16 @@ final class ClientConfig
             groupId: (int) $groupIdRaw,
             apiVersion: (string) $versionRaw,
             confirmationSecret: $secretRaw !== '' ? (string) $secretRaw : null,
+            confirmationCode: self::envString($prefix, 'CONFIRM_CODE'),
         );
+    }
+
+    private static function envString(string $prefix, string $suffix): ?string
+    {
+        $value = \getenv("{$prefix}_{$suffix}")
+        ?: $_ENV["{$prefix}_{$suffix}"] ?? $_SERVER["{$prefix}_{$suffix}"] ?? '';
+
+        return $value !== '' ? (string) $value : null;
     }
 
     public function withTransport(Transport $transport): self
@@ -121,6 +132,11 @@ final class ClientConfig
         return $this->with(confirmationSecret: $secret);
     }
 
+    public function withConfirmationCode(string $code): self
+    {
+        return $this->with(confirmationCode: $code);
+    }
+
     public function getTransport(): Transport
     {
         // Дефолт не кэшируем: DTO иммутабелен, CurlTransport дёшев в создании.
@@ -136,6 +152,7 @@ final class ClientConfig
         ?float $rateLimitPerSecond = null,
         #[SensitiveParameter]
         ?string $confirmationSecret = null,
+        ?string $confirmationCode = null,
     ): self {
         return new self(
             token: $this->token,
@@ -146,6 +163,7 @@ final class ClientConfig
             retryMaxAttempts: $retryMaxAttempts ?? $this->retryMaxAttempts,
             retryBackoffMs: $retryBackoffMs ?? $this->retryBackoffMs,
             rateLimitPerSecond: $rateLimitPerSecond ?? $this->rateLimitPerSecond,
+            confirmationCode: $confirmationCode ?? $this->confirmationCode,
             transport: $transport ?? $this->transport,
             logger: $logger ?? $this->logger,
             cache: $cache ?? $this->cache,

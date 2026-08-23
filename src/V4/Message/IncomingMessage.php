@@ -37,6 +37,14 @@ final class IncomingMessage
         return $this->message;
     }
 
+    /**
+     * API-клиент, привязанный к событию (для Context).
+     */
+    public function api(): ApiClient
+    {
+        return $this->api;
+    }
+
     public function messageId(): int
     {
         return (int) ($this->message['id'] ?? 0);

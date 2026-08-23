@@ -109,10 +109,25 @@ final class Bot
 
     /**
      * Точка входа для внешних источников: вебхук, Swoole/RoadRunner worker, тесты.
+     *
+     * При заданном в конфиге PSR-16 кэше дубликаты событий (reconnect LongPoll,
+     * ретраи вебхуков) отбрасываются по event_id с TTL из кэша.
      */
     public function dispatch(array|Update $update): void
     {
         $dto = $update instanceof Update ? $update : Update::fromLongPoll($update);
+
+        if ($this->config->cache !== null) {
+            $dedupKey = 'svk4_evt_' . $dto->groupId . '_' . $dto->eventId;
+            try {
+                if ($this->config->cache->has($dedupKey)) {
+                    return;
+                }
+                $this->config->cache->set($dedupKey, true, 259_200);
+            } catch (\Psr\SimpleCache\InvalidArgumentException) {
+                // Кэш недоступен — обрабатываем событие как обычно.
+            }
+        }
 
         // Свёртка middleware: последний зарегистрированный выполняется первым.
         $pipeline = $this->route(...);

@@ -144,10 +144,16 @@ final class OutgoingMessage
     /**
      * Отправляет сообщение; при превышении лимита длины разбивает текст.
      *
+     * @param int|string|null $peerId Адресат «на месте»: ->send($vkId) без ->to().
+     *
      * @return list<int> ID отправленных сообщений.
      */
-    public function send(): array
+    public function send(int|string|null $peerId = null): array
     {
+        if ($peerId !== null && $this->peerId === null && $this->userId === null) {
+            $this->to($peerId);
+        }
+
         $target = $this->resolveTarget();
 
         if (($this->text === null || $this->text === '') && $this->attachments === [] && $this->stickerId === null) {
@@ -240,6 +246,44 @@ final class OutgoingMessage
         }
 
         return self::MAX_LENGTH;
+    }
+
+    /**
+     * Редактирование ранее отправленного сообщения (messages.edit).
+     *
+     * @return bool Успешно ли отредактировано.
+     */
+    public function edit(int|string $conversationMessageId): bool
+    {
+        $params = [
+            'conversation_message_id' => $conversationMessageId,
+            'message' => $this->text ?? '',
+        ];
+
+        if ($this->peerId !== null) {
+            $params['peer_id'] = $this->peerId;
+        }
+
+        if ($this->keyboard !== null && !$this->keyboard->isEmpty()) {
+            $params['keyboard'] = \json_encode($this->keyboard, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+        }
+
+        if ($this->attachments !== []) {
+            $params['attachment'] = \implode(',', $this->attachments);
+        }
+
+        try {
+            $this->api->call('messages.edit', $params);
+
+            return true;
+        } catch (SimpleVkException $e) {
+            // VK возвращает 100/909/917 при невозможности правки — это штатный false
+            if (\in_array($e->vkErrorCode, [100, 908, 909, 910, 911, 912, 913, 914, 915, 916, 917], true)) {
+                return false;
+            }
+
+            throw $e;
+        }
     }
 
     /**

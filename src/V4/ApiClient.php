@@ -48,6 +48,54 @@ final class ApiClient
     }
 
     /**
+     * Итерация по всем элементам метода с пагинацией VK (offset или start_from).
+     *
+     * Пример:
+     *   foreach ($api->iterate('groups.getMembers', ['group_id' => 1], 'items') as $member) { ... }
+     *
+     * @param array<string, mixed> $params Начальные параметры; offset/next_from подставляются автоматически.
+     * @param non-empty-string $itemsKey Ключ массива элементов внутри response.
+     * @param positive-int $pageSize Страничный лимит (count), если в params не задан.
+     *
+     * @return \Generator<int, mixed>
+     */
+    public function iterate(
+        string $method,
+        array $params = [],
+        string $itemsKey = 'items',
+        int $pageSize = 1000,
+    ): \Generator {
+        $params['count'] ??= $pageSize;
+        $params['offset'] ??= 0;
+
+        do {
+            $response = $this->call($method, $params);
+
+            // Формат A: response = [items, count] либо response.items + offset
+            // Формат B: response.items + next_from (cursor-пагинация)
+            $items = $response[$itemsKey] ?? $response['items'] ?? [];
+            if (!\is_array($items)) {
+                return;
+            }
+
+            yield from \array_values($items);
+
+            $received = \count($items);
+
+            if (isset($response['next_from'])) {
+                // cursor-пагинация (newsfeed.execute-style)
+                $params['start_from'] = (string) $response['next_from'];
+                unset($params['offset']);
+            } else {
+                if ($received === 0 || $received < (int) $params['count']) {
+                    return;
+                }
+                $params['offset'] = (int) $params['offset'] + $received;
+            }
+        } while (true);
+    }
+
+    /**
      * Асинхронный вызов метода VK API (транспорт должен реализовать AsyncTransport).
      *
      * @param array<string, mixed> $params

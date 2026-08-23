@@ -14,5 +14,11 @@
         <include>
             <directory>src/V4</directory>
         </include>
+        <!-- Сетевые адаптеры покрываются интеграционными тестами и смоуками,
+             не считаются в пороге покрытия ядра -->
+        <exclude>
+            <directory>src/V4/Async</directory>
+            <file>src/V4/Streaming/StreamingClient.php</file>
+        </exclude>
     </source>
 </phpunit>

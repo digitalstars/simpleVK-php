@@ -8,10 +8,31 @@
         "docs": "https://simplevk.scripthub.ru/"
     },
     "keywords": [
-        "php", "vk", "vkontakte", "vk.com", "api", "vk-api", "wrapper", "sdk",
-        "framework", "library", "client", "bot", "chatbot", "vk-bot",
-        "longpoll", "callback", "auth", "oauth", "posting", "keyboard", "buttons",
-        "async", "amp", "swoole", "roadrunner"
+        "php",
+        "vk",
+        "vkontakte",
+        "vk.com",
+        "api",
+        "vk-api",
+        "wrapper",
+        "sdk",
+        "framework",
+        "library",
+        "client",
+        "bot",
+        "chatbot",
+        "vk-bot",
+        "longpoll",
+        "callback",
+        "auth",
+        "oauth",
+        "posting",
+        "keyboard",
+        "buttons",
+        "async",
+        "amp",
+        "swoole",
+        "roadrunner"
     ],
     "minimum-stability": "beta",
     "prefer-stable": true,
@@ -31,7 +52,8 @@
         "roave/security-advisories": "dev-latest",
         "ext-openssl": "*",
         "carthage-software/mago": "^1.0",
-        "phpunit/phpunit": "^12.0"
+        "phpunit/phpunit": "^12.0",
+        "psr/container": "^1"
     },
     "suggest": {
         "ext-curl": "Для транспорта по умолчанию (CurlTransport)",
@@ -53,5 +75,10 @@
     "scripts": {
         "test": "vendor/bin/phpunit",
         "analyze": "composer exec -- mago analyze"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "DigitalStars\\SimpleVK\\Tests\\": "tests/"
+        }
     }
 }

@@ -2,6 +2,8 @@
 
 namespace DigitalStars\SimpleVK\V4\Message;
 
+use DigitalStars\SimpleVK\V4\Dispatcher\BaseButton;
+
 /**
  * Клавиатура VK: строки кнопок, one-time/inline режимы.
  *
@@ -44,6 +46,74 @@ final class Keyboard implements \JsonSerializable
         $this->rows[] = \array_values($buttons);
 
         return $this;
+    }
+
+    /**
+     * Мост для EventDispatcher: строит клавиатуру из массива строк экземпляров
+     * кнопок-классов (наследников BaseButton). label/color/payload/type берутся
+     * из состояния объекта и атрибута #[AsButton].
+     *
+     * @param array<list<BaseButton>> $rows
+     */
+    public static function fromButtons(array $rows): self
+    {
+        $keyboard = new self();
+
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                throw new \LogicException('Keyboard::fromButtons() ожидает массив строк кнопок');
+            }
+
+            $buttons = [];
+            foreach ($row as $button) {
+                if (!$button instanceof BaseButton) {
+                    throw new \LogicException('В строке клавиатуры ожидается экземпляр ' . BaseButton::class);
+                }
+
+                $payload = $button->getPayload();
+                $action = $payload['action'] ?? self::defaultPayloadAction($button::class);
+                $payload += ['action' => $action];
+
+                $type = \strtolower((string) ($button->getType() ?? 'text'));
+                $label = $button->getLabel() ?? 'Кнопка';
+
+                $vkButton = match ($type) {
+                    'callback' => Button::callback($label, $payload),
+                    default => Button::text($label, $payload),
+                };
+
+                $colorMap = [
+                    'blue' => Button::COLOR_PRIMARY,
+                    'white' => Button::COLOR_SECONDARY,
+                    'red' => Button::COLOR_NEGATIVE,
+                    'green' => Button::COLOR_POSITIVE,
+                    'primary' => Button::COLOR_PRIMARY,
+                    'secondary' => Button::COLOR_SECONDARY,
+                    'negative' => Button::COLOR_NEGATIVE,
+                    'positive' => Button::COLOR_POSITIVE,
+                ];
+                $color = $colorMap[\strtolower((string) ($button->getColor() ?? 'blue'))] ?? null;
+                if ($color !== null) {
+                    $vkButton = $vkButton->color($color);
+                }
+
+                $buttons[] = $vkButton;
+            }
+
+            $keyboard->row(...$buttons);
+        }
+
+        return $keyboard;
+    }
+
+    /**
+     * Дефолтный payload-action из короткого имени класса (как в v3).
+     */
+    private static function defaultPayloadAction(string $className): string
+    {
+        $pos = \strrpos($className, '\\');
+
+        return $pos === false ? $className : \substr($className, $pos + 1);
     }
 
     /**
