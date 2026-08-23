@@ -105,8 +105,6 @@ final class OutgoingMessage
         }
 
         return $this;
-
-        return $this;
     }
 
     /**
