@@ -8,50 +8,39 @@
         "docs": "https://simplevk.scripthub.ru/"
     },
     "keywords": [
-        "php",
-        "vk",
-        "vkontakte",
-        "vk.com",
-        "api",
-        "vk-api",
-        "wrapper",
-        "sdk",
-        "framework",
-        "library",
-        "client",
-        "bot",
-        "chatbot",
-        "vk-bot",
-        "longpoll",
-        "callback",
-        "auth",
-        "oauth",
-        "posting",
-        "keyboard",
-        "buttons"
+        "php", "vk", "vkontakte", "vk.com", "api", "vk-api", "wrapper", "sdk",
+        "framework", "library", "client", "bot", "chatbot", "vk-bot",
+        "longpoll", "callback", "auth", "oauth", "posting", "keyboard", "buttons",
+        "async", "amp", "swoole", "roadrunner"
     ],
     "minimum-stability": "beta",
     "prefer-stable": true,
     "homepage": "https://simplevk.scripthub.ru/",
     "require": {
-        "php": ">=8.2",
-        "ext-curl": "*",
+        "php": ">=8.4",
         "ext-json": "*",
         "ext-mbstring": "*",
+        "psr/log": "^3.0",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
         "psr/simple-cache": "^3.0",
-        "symfony/cache": "^7.3"
+        "amphp/amp": "^3.1",
+        "amphp/http-client": "^5.3"
     },
     "require-dev": {
         "roave/security-advisories": "dev-latest",
         "ext-openssl": "*",
-        "vimeo/psalm": "^7.0",
-        "carthage-software/mago": "^1.0"
+        "carthage-software/mago": "^1.0",
+        "phpunit/phpunit": "^12.0"
     },
     "suggest": {
+        "ext-curl": "Для транспорта по умолчанию (CurlTransport)",
+        "symfony/cache": "PSR-16 реализация кэша для Auth/Store",
+        "guzzlehttp/guzzle": "PSR-18 транспорт для продакшн-окружений",
         "ext-redis": "Для обнаружения дублирующихся событий от VK API и их игнорирования",
         "ext-pcntl": "Автоматическая многопоточная обработка событий через Longpoll",
         "ext-posix": "Автоматическая многопоточная обработка событий через Longpoll",
-        "ext-ffi": "Для ускорения проверки длинны сообщений и разбивки отправляемых сообщений"
+        "ext-ffi": "Для ускорения проверки длины сообщений и разбивки отправляемых сообщений"
     },
     "autoload": {
         "files": [
@@ -62,6 +51,7 @@
         }
     },
     "scripts": {
-        "psalm": "vendor/bin/psalm --config=psalm.xml"
+        "test": "vendor/bin/phpunit",
+        "analyze": "composer exec -- mago analyze"
     }
 }
