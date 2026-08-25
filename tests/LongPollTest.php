@@ -1,0 +1,115 @@
+<?php
+
+declare(strict_types=1);
+
+namespace DigitalStars\SimpleVK\Tests;
+
+use DigitalStars\SimpleVK\ApiClient;
+use DigitalStars\SimpleVK\Bot;
+use DigitalStars\SimpleVK\Config\ClientConfig;
+use DigitalStars\SimpleVK\Event\Update;
+use DigitalStars\SimpleVK\Exception\SimpleVkException;
+use DigitalStars\SimpleVK\LongPoll\LongPollClient;
+use DigitalStars\SimpleVK\Message\IncomingMessage;
+use DigitalStars\SimpleVK\Transport\FakeTransport;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Тесты LongPoll-слоя: построение Update из ответов сервера и полный флоу
+ * dispatch → onMessage → reply через FakeTransport.
+ */
+final class LongPollTest extends TestCase
+{
+    public function testUpdateFromLongPollShape(): void
+    {
+        $update = Update::fromLongPoll([
+            'type' => 'message_new',
+            'event_id' => 'x',
+            'group_id' => 42,
+            'object' => [
+                'message' => ['id' => 1, 'from_id' => 7, 'peer_id' => 2000000001, 'text' => 'hi'],
+                'client_info' => [],
+            ],
+        ]);
+
+        self::assertSame('hi', $update->object()['message']['text']);
+        self::assertSame(42, $update->groupId);
+    }
+
+    public function testBotHandlesFullMessageFlow(): void
+    {
+        $fake = new FakeTransport();
+        $fake->setResponse('messages.send', [['message_id' => 55]]);
+        $bot = Bot::create(ClientConfig::create('T', 9)->withTransport($fake));
+
+        $got = null;
+        $bot->onMessage(function (IncomingMessage $m) use (&$got): void {
+            $got = $m;
+            $m->outgoing()->text('ok')->send();
+        });
+
+        $bot->dispatch([
+            'type' => 'message_new',
+            'event_id' => '1',
+            'group_id' => 9,
+            'object' => [
+                'message' => ['id' => 3, 'from_id' => 11, 'peer_id' => 2000000002, 'text' => 'тест'],
+                'client_info' => [],
+            ],
+        ]);
+
+        self::assertNotNull($got);
+        self::assertSame('тест', $got->text());
+        self::assertSame(2000000002, $fake->lastParamsFor('messages.send')['peer_id']);
+    }
+
+    public function testLongPollRequiresGroupId(): void
+    {
+        $fake = new FakeTransport();
+        $bot = Bot::create(ClientConfig::create('T', 0)->withTransport($fake));
+
+        $this->expectException(SimpleVkException::class);
+        new \DigitalStars\SimpleVK\LongPoll\LongPollClient($bot->config, $bot->api());
+    }
+
+    public function testSkipBacklogDiscardsPendingEvents(): void
+    {
+        $fake = new FakeTransport([
+            'groups.getLongPollServer' => [
+                'key' => 'k',
+                'server' => 'http://lp',
+                'ts' => 100,
+            ],
+        ]);
+        $config = ClientConfig::create('T', 9)->withTransport($fake);
+        $api = new ApiClient($config, $fake);
+
+        $client = new class($config, $api) extends LongPollClient {
+            /** @var list<string> */
+            public array $responses = [];
+
+            protected function httpGet(string $url): string|false
+            {
+                return array_shift($this->responses) ?? '{"ts":0,"updates":[]}';
+            }
+        };
+
+        // Бэклог: старое событие с ts=200. skipBacklog должен его выбросить.
+        $client->responses[] = \json_encode(
+            [
+                'ts' => 200,
+                'updates' => [['type' => 'message_new', 'event_id' => 'old', 'group_id' => 9, 'object' => []]],
+            ],
+            \JSON_THROW_ON_ERROR,
+        );
+
+        $client->skipBacklog();
+
+        // Следующий wait() должен запросить уже ts=200, а не 100 — старое событие потеряно.
+        $client->responses[] = '{"ts":201,"updates":[{"type":"message_new","event_id":"new","group_id":9,"object":{"message":{"id":1,"from_id":2,"peer_id":3,"text":"fresh"},"client_info":[]}}]}';
+        $updates = $client->wait();
+
+        self::assertCount(1, $updates);
+        self::assertSame(0, $updates[0]->eventId); // событие 'old' выброшено, 'new' не содержит числового event_id
+    }
+}

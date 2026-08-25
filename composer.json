@@ -63,7 +63,7 @@
     },
     "autoload": {
         "psr-4": {
-            "DigitalStars\\SimpleVK\\V4\\": "src/V4/"
+            "DigitalStars\\SimpleVK\\": "src/"
         }
     },
     "scripts": {

@@ -7,7 +7,7 @@ php-version = "8.4.0" # MIN PHP библиотеки (composer.json: >=8.4)
 
 [source]
 paths    = [
-    "src/V4", # только v4; legacy src/*.php (v3) уходит при мерже
+    "src",
 ]
 includes = ["vendor"] # индексация символов зависимостей (Psr\*, Amp\*) для анализатора
 excludes = [
@@ -143,4 +143,4 @@ register-super-globals = true         # $_ENV для ClientConfig::fromEnv()
 # [guard] из референса здесь не переносился: слои Domain/Feature/Worker —
 # структура приложения tower_bot. Для библиотеки периметральный guard
 # имеет смысл, когда появится разделение core/adapters (кандидат: запретить
-# ядру V4\ зависеть от V4\Async\*).
+# ядру зависеть от Async\*).

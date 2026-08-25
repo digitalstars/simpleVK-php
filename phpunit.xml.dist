@@ -7,18 +7,18 @@
          cacheDirectory=".phpunit.cache">
     <testsuites>
         <testsuite name="v4">
-            <directory>tests/V4</directory>
+            <directory>tests</directory>
         </testsuite>
     </testsuites>
     <source>
         <include>
-            <directory>src/V4</directory>
+            <directory>src</directory>
         </include>
         <!-- Сетевые адаптеры покрываются интеграционными тестами и смоуками,
              не считаются в пороге покрытия ядра -->
         <exclude>
-            <directory>src/V4/Async</directory>
-            <file>src/V4/Streaming/StreamingClient.php</file>
+            <directory>src/Async</directory>
+            <file>src/Streaming/StreamingClient.php</file>
         </exclude>
     </source>
 </phpunit>

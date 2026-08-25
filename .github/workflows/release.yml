@@ -43,7 +43,7 @@ jobs:
           declare(strict_types=1);
 
           // Активация репортера ТОЛЬКО для CI-сборки релизного архива.
-          \DigitalStars\SimpleVK\V4\Service\PackagistReporter::checkAndReport('${{ github.event.release.tag_name }}');
+          \DigitalStars\SimpleVK\Service\PackagistReporter::checkAndReport('${{ github.event.release.tag_name }}');
           PHP
 
           # Регистрируем bootstrap как autoload.files внутреннего пакета

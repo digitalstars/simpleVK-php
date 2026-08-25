@@ -15,7 +15,7 @@
 ## 1. Минимальный эхо-бот (синхронный, LongPoll)
 
 ```php
-use DigitalStars\SimpleVK\V4\{Bot, ClientConfig};
+use DigitalStars\SimpleVK\{Bot, ClientConfig};
 
 $config = ClientConfig::fromEnv();          // токен/groupId из окружения
 $bot = Bot::create($config);
@@ -28,8 +28,8 @@ $bot->run();   // LongPoll-цикл; Ctrl+C для остановки
 ## 2. Полный конфиг с зависимостями (продакшн)
 
 ```php
-use DigitalStars\SimpleVK\V4\{Bot, ClientConfig};
-use DigitalStars\SimpleVK\V4\Transport\{PsrTransport, CurlTransport};
+use DigitalStars\SimpleVK\{Bot, ClientConfig};
+use DigitalStars\SimpleVK\Transport\{PsrTransport, CurlTransport};
 use Psr\Log\LoggerInterface;
 
 $config = ClientConfig::create(
@@ -85,7 +85,7 @@ $msg->text('Каталог')->carousel($carousel)->send();
 ## 5. Роутинг атрибутами (аналог v3 #[Trigger]/#[AsButton])
 
 ```php
-use DigitalStars\SimpleVK\V4\Attributes\{OnCommand, OnPayload, Fallback};
+use DigitalStars\SimpleVK\Attributes\{OnCommand, OnPayload, Fallback};
 
 final class OrderHandlers extends HandlerSet
 {
@@ -135,7 +135,7 @@ $app->post('/vk/callback', function (Request $request) use ($bot) {
 ## 8. Асинхронность: Amp (Revolt) — тот же API, другой транспорт
 
 ```php
-use DigitalStars\SimpleVK\V4\Async\AmpAdapter;
+use DigitalStars\SimpleVK\Async\AmpAdapter;
 
 $config = ClientConfig::fromEnv()
     ->withTransport(AmpAdapter::transport());      // amphp/http-client
@@ -190,6 +190,6 @@ assert($transport->calls[0]['method'] === 'messages.send');
 Auth/SiteAuth, Store (кэш состояния), Setting, Diagnostics.
 
 ## Что ломается относительно v3 (осознанно)
-- Пространства имён `DigitalStars\SimpleVK\V4\...`, все классы переименованы
+- Пространства имён `DigitalStars\SimpleVK\...`, все классы переименованы
 - Кастомный автозагрузчик удалён — только Composer (+ vendor-архив к релизу)
 - MIN PHP 8.4, строгая типизация везде
