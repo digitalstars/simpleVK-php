@@ -67,6 +67,24 @@ class LongPollClient
     }
 
     /**
+     * Пропускает накопившийся бэклог: делает один poll и выбрасывает события,
+     * оставляя только свежий ts. Вызывать один раз перед циклом wait().
+     */
+    public function skipBacklog(): void
+    {
+        $this->server ??= $this->initServer();
+
+        try {
+            $response = $this->poll(); // события отбрасываются, остаётся свежий ts
+            if ($this->server !== null && isset($response['ts'])) {
+                $this->server['ts'] = (int) $response['ts'];
+            }
+        } catch (LongPollReset) {
+            $this->server = null;
+        }
+    }
+
+    /**
      * Точка HTTP-ввода для тестов (переопределяется в наследниках).
      *
      * @return string|false

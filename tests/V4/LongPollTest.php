@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace DigitalStars\SimpleVK\Tests\V4;
 
+use DigitalStars\SimpleVK\V4\ApiClient;
 use DigitalStars\SimpleVK\V4\Bot;
 use DigitalStars\SimpleVK\V4\Config\ClientConfig;
 use DigitalStars\SimpleVK\V4\Event\Update;
 use DigitalStars\SimpleVK\V4\Exception\SimpleVkException;
+use DigitalStars\SimpleVK\V4\LongPoll\LongPollClient;
 use DigitalStars\SimpleVK\V4\Message\IncomingMessage;
 use DigitalStars\SimpleVK\V4\Transport\FakeTransport;
 use PHPUnit\Framework\TestCase;
@@ -68,5 +70,46 @@ final class LongPollTest extends TestCase
 
         $this->expectException(SimpleVkException::class);
         new \DigitalStars\SimpleVK\V4\LongPoll\LongPollClient($bot->config, $bot->api());
+    }
+
+    public function testSkipBacklogDiscardsPendingEvents(): void
+    {
+        $fake = new FakeTransport([
+            'groups.getLongPollServer' => [
+                'key' => 'k',
+                'server' => 'http://lp',
+                'ts' => 100,
+            ],
+        ]);
+        $config = ClientConfig::create('T', 9)->withTransport($fake);
+        $api = new ApiClient($config, $fake);
+
+        $client = new class($config, $api) extends LongPollClient {
+            /** @var list<string> */
+            public array $responses = [];
+
+            protected function httpGet(string $url): string|false
+            {
+                return array_shift($this->responses) ?? '{"ts":0,"updates":[]}';
+            }
+        };
+
+        // Бэклог: старое событие с ts=200. skipBacklog должен его выбросить.
+        $client->responses[] = \json_encode(
+            [
+                'ts' => 200,
+                'updates' => [['type' => 'message_new', 'event_id' => 'old', 'group_id' => 9, 'object' => []]],
+            ],
+            \JSON_THROW_ON_ERROR,
+        );
+
+        $client->skipBacklog();
+
+        // Следующий wait() должен запросить уже ts=200, а не 100 — старое событие потеряно.
+        $client->responses[] = '{"ts":201,"updates":[{"type":"message_new","event_id":"new","group_id":9,"object":{"message":{"id":1,"from_id":2,"peer_id":3,"text":"fresh"},"client_info":[]}}]}';
+        $updates = $client->wait();
+
+        self::assertCount(1, $updates);
+        self::assertSame(0, $updates[0]->eventId); // событие 'old' выброшено, 'new' не содержит числового event_id
     }
 }

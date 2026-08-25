@@ -9,6 +9,7 @@ use DigitalStars\SimpleVK\V4\Event\Update;
 use DigitalStars\SimpleVK\V4\Event\UpdateType;
 use DigitalStars\SimpleVK\V4\LongPoll\LongPollClient;
 use DigitalStars\SimpleVK\V4\Message\IncomingMessage;
+use Throwable;
 
 /**
  * Бот: регистрация обработчиков, middleware и диспетчеризация событий.
@@ -143,14 +144,43 @@ final class Bot
 
     /**
      * Блокирующий LongPoll-цикл (для скриптов и true-async корутин).
+     *
+     * Устойчив к сбоям: ошибка одного события или сети логируется,
+     * цикл продолжается (с паузой 1с после сетевого сбоя).
+     *
+     * @param bool $skipBacklog Пропустить события, накопившиеся до старта.
      */
-    public function run(): void
+    public function run(bool $skipBacklog = false): void
     {
         $longpoll = new LongPollClient($this->config, $this->api);
 
+        if ($skipBacklog) {
+            $longpoll->skipBacklog();
+        }
+
         while (true) {
-            foreach ($longpoll->wait() as $update) {
-                $this->dispatch($update);
+            try {
+                $updates = $longpoll->wait();
+            } catch (Throwable $e) {
+                // Сбой сети/протокола: логируем и делаем паузу, чтобы не крутить холостой цикл.
+                $this->config->logger->error('LongPoll: {error}', ['error' => $e->getMessage(), 'exception' => $e]);
+                \sleep(1);
+
+                continue;
+            }
+
+            foreach ($updates as $update) {
+                try {
+                    $this->dispatch($update);
+                } catch (Throwable $e) {
+                    // Падение одного события не останавливает обработку остальных.
+                    $this->config->logger->error('Обработка события {type} упала: {error}', [
+                        'type' => $update->type->value,
+                        'event_id' => $update->eventId,
+                        'error' => $e->getMessage(),
+                        'exception' => $e,
+                    ]);
+                }
             }
         }
     }

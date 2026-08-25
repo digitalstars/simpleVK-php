@@ -7,11 +7,14 @@ namespace DigitalStars\SimpleVK\V4\Dispatcher;
 use DigitalStars\SimpleVK\V4\ApiClient;
 use DigitalStars\SimpleVK\V4\Dispatcher\Attributes\AsButton;
 use DigitalStars\SimpleVK\V4\Dispatcher\Attributes\Fallback;
+use DigitalStars\SimpleVK\V4\Dispatcher\Attributes\OnException;
+use DigitalStars\SimpleVK\V4\Dispatcher\Attributes\Throttle;
 use DigitalStars\SimpleVK\V4\Dispatcher\Attributes\Trigger;
 use DigitalStars\SimpleVK\V4\Dispatcher\Attributes\UseMiddleware;
 use DigitalStars\SimpleVK\V4\Event\Update;
 use DigitalStars\SimpleVK\V4\Message\IncomingMessage;
 use LogicException;
+use Psr\SimpleCache\CacheInterface;
 use ReflectionClass;
 use ReflectionException;
 use RuntimeException;
@@ -24,11 +27,12 @@ use Throwable;
  */
 class EventDispatcher
 {
-    /** @var array{payload: array<string, class-string>, command: array<string, class-string>, regex: array<string, class-string>} */
+    /** @var array{payload: array<string, class-string>, command: array<string, class-string>, regex: array<string, class-string>, exception: array<class-string, class-string>} */
     private array $routeMap = [
         'payload' => [],
         'command' => [],
         'regex' => [],
+        'exception' => [],
     ];
 
     private ?string $fallbackAction = null;
@@ -43,6 +47,8 @@ class EventDispatcher
         private readonly ArgumentResolver $argumentResolver,
         /** Нужен для построения Context у не-message событий (callback и т.п.). */
         private readonly ?ApiClient $api = null,
+        /** PSR-16 кэш для #[Throttle]; обязателен, если хоть один Action его использует. */
+        private readonly ?CacheInterface $cache = null,
     ) {
         foreach ($this->config->actionsPaths as $path) {
             $this->scanDirectoryForActions($path);
@@ -130,7 +136,7 @@ class EventDispatcher
      *
      * @param array<string, mixed>|null $payload
      *
-     * @return array{actionClass: class-string, actionArgs: array<string, mixed>}|null
+     * @return array{actionClass: class-string, actionArgs: array<int|string, mixed>}|null
      */
     private function findRoute(?string $text, ?array $payload): ?array
     {
@@ -154,10 +160,10 @@ class EventDispatcher
             // Приоритет 3: regex-паттерны (в порядке регистрации)
             foreach ($this->routeMap['regex'] as $pattern => $className) {
                 $matches = [];
-                if (\preg_match($pattern, $text, $matches) === 1) {
+                if (\preg_match($pattern, $text, $matches, \PREG_UNMATCHED_AS_NULL) === 1) {
                     return [
                         'actionClass' => $className,
-                        'actionArgs' => \array_slice($matches, 1),
+                        'actionArgs' => self::extractMatchArgs($matches),
                     ];
                 }
             }
@@ -172,15 +178,53 @@ class EventDispatcher
     }
 
     /**
+     * Именованные группы (?P<name>...) уходят в аргументы по имени,
+     * без них — позиционные группы как раньше.
+     *
+     * @param array<int|string, string|null> $matches
+     *
+     * @return array<string|int, mixed>
+     */
+    private static function extractMatchArgs(array $matches): array
+    {
+        $named = [];
+        foreach ($matches as $key => $value) {
+            if (\is_string($key)) {
+                $named[$key] = $value;
+            }
+        }
+
+        return $named !== [] ? $named : \array_slice($matches, 1);
+    }
+
+    /**
      * Создаёт экземпляр Action и запускает его через middleware-пайплайн.
      *
      * @param class-string $actionClass
-     * @param array<string, mixed> $actionArgs
+     * @param array<int|string, mixed> $actionArgs
      */
     public function runAction(string $actionClass, Context $context, array $actionArgs = []): void
     {
-        $instance = $this->createInstance($actionClass, $context);
+        $this->runActionInternal($actionClass, $context, $actionArgs, allowExceptionRouting: true);
+    }
+
+    /**
+     * @param class-string $actionClass
+     * @param array<string|int, mixed> $actionArgs
+     */
+    private function runActionInternal(
+        string $actionClass,
+        Context $context,
+        array $actionArgs,
+        bool $allowExceptionRouting,
+    ): void {
         $reflectionClass = new ReflectionClass($actionClass);
+
+        if ($allowExceptionRouting && !$this->checkThrottle($reflectionClass, $context)) {
+            return; // лимит исчерпан — событие отброшено
+        }
+
+        $instance = $this->createInstance($actionClass, $context);
         $previousAction = $context->actionClass;
         $context->actionClass = $actionClass;
 
@@ -190,10 +234,7 @@ class EventDispatcher
             $globalAlreadyApplied = $this->globalMiddlewareApplied;
             $this->globalMiddlewareApplied = true;
 
-            $actionMiddleware = \array_map(
-                static fn($attr): string => $attr->newInstance()->middleware,
-                $reflectionClass->getAttributes(UseMiddleware::class),
-            );
+            $actionMiddleware = self::inheritedMiddlewares($reflectionClass);
 
             $middlewareStack = $globalAlreadyApplied
                 ? $actionMiddleware
@@ -219,7 +260,7 @@ class EventDispatcher
 
             $pipeline = \array_reduce(
                 \array_reverse($middlewareStack),
-                fn(callable $next, string $middlewareClass): callable => static function (Context $ctx) use (
+                fn(callable $next, string $middlewareClass): callable => function (Context $ctx) use (
                     $next,
                     $middlewareClass,
                 ): void {
@@ -230,10 +271,110 @@ class EventDispatcher
                 $finalHandler,
             );
 
-            $pipeline($context);
+            try {
+                $pipeline($context);
+            } catch (Throwable $e) {
+                if (!$allowExceptionRouting || !$this->routeException($e, $context)) {
+                    throw $e;
+                }
+            }
         } finally {
             $context->actionClass = $previousAction;
         }
+    }
+
+    /**
+     * Middleware текущего класса + всех предков (базовый класс задаёт scope).
+     *
+     * @return list<class-string>
+     */
+    private static function inheritedMiddlewares(ReflectionClass $class): array
+    {
+        $middlewares = [];
+        for ($c = $class; $c !== false; $c = $c->getParentClass()) {
+            foreach (\array_reverse($c->getAttributes(UseMiddleware::class)) as $attribute) {
+                $middleware = $attribute->newInstance()->middleware;
+                $middlewares[$middleware] ??= $middleware;
+            }
+        }
+
+        return \array_values($middlewares);
+    }
+
+    /**
+     * Проверяет #[Throttle] класса (и предков). true — можно выполнять.
+     */
+    private function checkThrottle(ReflectionClass $class, Context $context): bool
+    {
+        $throttles = [];
+        for ($c = $class; $c !== false; $c = $c->getParentClass()) {
+            foreach ($c->getAttributes(Throttle::class) as $attribute) {
+                $throttles[] = $attribute->newInstance();
+            }
+        }
+
+        if ($throttles === []) {
+            return true;
+        }
+
+        if ($this->cache === null) {
+            throw new LogicException(
+                "#[Throttle] на '{$class->getName()}' требует PSR-16 кэш "
+                . '(4-й аргумент EventDispatcher или ClientConfig::withCache())',
+            );
+        }
+
+        foreach ($throttles as $throttle) {
+            $key = 'svk4_rl_' . \md5($class->getName()) . '_' . ($context->userId ?? 'anon');
+            try {
+                $bucket = $this->cache->get($key);
+                $now = \time();
+
+                if (!\is_array($bucket) || !isset($bucket['count'], $bucket['reset']) || $now >= $bucket['reset']) {
+                    $this->cache->set(
+                        $key,
+                        ['count' => 1, 'reset' => $now + $throttle->windowSeconds],
+                        $throttle->windowSeconds,
+                    );
+                    continue;
+                }
+
+                if ((int) $bucket['count'] >= $throttle->max) {
+                    if ($this->config->debug) {
+                        \trigger_error(
+                            "Throttle: '{$class->getName()}' для пользователя {$context->userId} отклонён",
+                            E_USER_WARNING,
+                        );
+                    }
+
+                    return false;
+                }
+
+                ++$bucket['count'];
+                $this->cache->set($key, $bucket, \max(1, (int) $bucket['reset'] - $now));
+            } catch (\Psr\SimpleCache\InvalidArgumentException) {
+                // Кэш недоступен — не блокируем обработку.
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Ищет обработчик исключения от наиболее специфичного класса к базовым.
+     */
+    private function routeException(Throwable $e, Context $context): bool
+    {
+        for ($class = $e::class; $class !== false; $class = \get_parent_class($class)) {
+            $handlerClass = $this->routeMap['exception'][$class] ?? null;
+            if ($handlerClass !== null) {
+                $this->runActionInternal($handlerClass, $context, ['exception' => $e], allowExceptionRouting: false); // защита от циклов: ошибка в обработчике уходит наверх
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -349,6 +490,13 @@ class EventDispatcher
             $this->routeMap['payload'][$actionName] = $className;
         }
 
+        if ($reflection->getAttributes(Throttle::class) !== [] && $this->cache === null) {
+            throw new LogicException(
+                "#[Throttle] на '{$className}' требует PSR-16 кэш "
+                . '(4-й аргумент EventDispatcher или ClientConfig::withCache())',
+            );
+        }
+
         foreach ($reflection->getAttributes(Trigger::class) as $attribute) {
             $trigger = $attribute->newInstance();
 
@@ -371,6 +519,19 @@ class EventDispatcher
                 }
                 $this->routeMap['regex'][$trigger->pattern] = $className;
             }
+        }
+
+        foreach ($reflection->getAttributes(OnException::class) as $attribute) {
+            $onException = $attribute->newInstance();
+
+            if (isset($this->routeMap['exception'][$onException->exception])) {
+                $existing = $this->routeMap['exception'][$onException->exception];
+                throw new LogicException(
+                    "Дублирующийся обработчик '{$onException->exception}': '{$existing}' и '{$className}'",
+                );
+            }
+
+            $this->routeMap['exception'][$onException->exception] = $className;
         }
 
         if ($reflection->getAttributes(Fallback::class) !== []) {
